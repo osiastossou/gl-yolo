@@ -27,7 +27,7 @@ def main(modelpath, data, outname,epochs):
     model = YOLO(modelpath) 
     print("Modèle de base chargé.")
 
-    model = model.load("yolo11n.pt")
+    model = model.load("yolo12n.pt")
 
 
 
@@ -84,6 +84,7 @@ if __name__ == '__main__':
     #python main.py -model 'Yolo11CBAM/yolov11n-gld-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
 
     
+    #python train.py -model 'ultralytics/cfg/models/12/yolo12.yaml' -data '/Users/osias/Documents/PHD/ultralytics-osias/ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'outname' -epochs 100
 
 
 
