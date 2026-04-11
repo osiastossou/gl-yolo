@@ -10,6 +10,10 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
+from Yolo11CBAM.custom_modules import CBAM,TransformerBlock, GL_CAB, GL_CAB_PSABlock,DilatedDepthwisePyramid,GL_CAB_ABlock
+from Yolo11CBAM.GLD import MBFPN,GLCAB
+from Yolo11CBAM.MSAF_YOLO_Module import MFSPPF_Module, MSAF_Block, MSConcat, MSFocus_Module
+
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
     AIFI,

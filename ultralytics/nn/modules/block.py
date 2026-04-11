@@ -2065,3 +2065,376 @@ class RealNVP(nn.Module):
             self.float()
         z, log_det = self.backward_p(x)
         return self.prior.log_prob(z) + log_det
+
+
+# Osias
+class CAAttn(nn.Module):
+    """Cross-Area Attention module combining vertical and horizontal area attention.
+
+    Extends Area Attention (AAttn) by computing attention in both vertical and horizontal
+    directions in parallel, then fusing the outputs with a learned scalar alpha per head.
+    This captures both axis-aligned dependencies in a single forward pass, at the cost of
+    roughly 2x the computation of a single-direction AAttn (still cheaper than global attention).
+
+    Attributes:
+        area (int): Number of areas (l) the feature map is divided into per direction.
+        num_heads (int): Number of attention heads.
+        head_dim (int): Dimension of each attention head.
+        all_head_dim (int): Total dimension across all heads (num_heads * head_dim).
+        qkv_v (Conv): QKV projection for the vertical branch.
+        qkv_h (Conv): QKV projection for the horizontal branch.
+        proj (Conv): Final output projection.
+        pe_v (Conv): Position encoding (depthwise conv) for the vertical branch.
+        pe_h (Conv): Position encoding (depthwise conv) for the horizontal branch.
+        alpha (nn.Parameter): Learned per-head fusion weight in [0, 1].
+                              alpha → 1 privileges vertical, alpha → 0 privileges horizontal.
+
+    Examples:
+        >>> attn = CrossAAttn(dim=256, num_heads=8, area=4)
+        >>> x = torch.randn(1, 256, 32, 32)
+        >>> output = attn(x)
+        >>> print(output.shape)
+        torch.Size([1, 256, 32, 32])
+    """
+
+    def __init__(self, dim: int, num_heads: int, area: int = 4):
+        """Initialize CrossAAttn module.
+
+        Args:
+            dim (int): Number of input/output channels.
+            num_heads (int): Number of attention heads.
+            area (int): Number of strips l per direction. The vertical branch splits
+                        the feature map into l horizontal strips of shape (H/l, W),
+                        and the horizontal branch into l vertical strips of shape (H, W/l).
+        """
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} must be divisible by num_heads {num_heads}"
+
+        self.area = area
+        self.num_heads = num_heads
+        self.head_dim = head_dim = dim // num_heads
+        self.all_head_dim = all_head_dim = head_dim * num_heads
+
+        # Separate QKV projections per branch so each can specialise independently
+        self.qkv_v = Conv(dim, all_head_dim * 3, 1, act=False)  # vertical branch
+        self.qkv_h = Conv(dim, all_head_dim * 3, 1, act=False)  # horizontal branch
+
+        # Shared output projection (receives the fused tensor)
+        self.proj = Conv(all_head_dim, dim, 1, act=False)
+
+        # Per-branch position encodings (depthwise 7×7, same as AAttn)
+        self.pe_v = Conv(all_head_dim, all_head_dim, 7, 1, 3, g=all_head_dim, act=False)
+        self.pe_h = Conv(all_head_dim, all_head_dim, 7, 1, 3, g=all_head_dim, act=False)
+
+        # Learned fusion weight: one scalar per head, shared across spatial positions.
+        # sigmoid(alpha) ∈ (0,1): controls how much weight goes to the vertical branch.
+        self.alpha = nn.Parameter(torch.zeros(1, num_heads, 1, 1))
+
+    # ------------------------------------------------------------------
+    # Internal helper
+    # ------------------------------------------------------------------
+
+    def _area_attention(
+        self,
+        qkv_proj: nn.Module,
+        x: torch.Tensor,
+        B: int,
+        H: int,
+        W: int,
+        vertical: bool,
+    ):
+        """Run one directional area-attention branch.
+
+        For the vertical branch (vertical=True):
+            - The feature map is split into `area` horizontal strips of shape (H/area, W).
+            - Attention is computed within each strip independently.
+
+        For the horizontal branch (vertical=False):
+            - The feature map is transposed (H ↔ W) so the same reshape logic applies,
+              then transposed back — a zero-cost trick that avoids duplicating code.
+
+        Args:
+            qkv_proj (nn.Module): The QKV Conv layer for this branch.
+            x (torch.Tensor): Input feature map, shape (B, C, H, W).
+            B (int): Original batch size.
+            H (int): Feature map height.
+            W (int): Feature map width.
+            vertical (bool): If True, split along H (vertical strips).
+                             If False, split along W (horizontal strips).
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]:
+                - out : attended output, shape (B, all_head_dim, H, W)
+                - v_spatial : value tensor in spatial layout (for position encoding),
+                              shape (B, all_head_dim, H, W)
+        """
+        # For the horizontal branch, transpose H and W so we can reuse
+        # exactly the same vertical-strip logic — then transpose back at the end.
+        if not vertical:
+            x = x.transpose(2, 3)          # (B, C, W, H)  ← swap H and W
+            H, W = W, H
+
+        N = H * W
+
+        # --- QKV projection -------------------------------------------------
+        # qkv_proj is a 1×1 Conv: (B, C, H, W) → (B, 3*all_head_dim, H, W)
+        # We flatten spatial dims and put them on dim-1 for the attention math.
+        qkv = qkv_proj(x).flatten(2).transpose(1, 2)   # (B, N, 3*all_head_dim)
+
+        # --- Reshape into area strips ----------------------------------------
+        # Merge the `area` strips into the batch dimension so that PyTorch's
+        # batched matmul handles each strip independently — exactly like AAttn.
+        #   Before: (B,          N,          3*all_head_dim)
+        #   After:  (B * area,   N // area,  3*all_head_dim)
+        if self.area > 1:
+            qkv = qkv.reshape(B * self.area, N // self.area, self.all_head_dim * 3)
+
+        Ba, Na, _ = qkv.shape   # Ba = B*area (or B when area=1)
+
+        # --- Split into Q, K, V and reshape for multi-head attention ---------
+        # Shape after view+permute: (Ba, num_heads, head_dim, Na)
+        q, k, v = (
+            qkv.view(Ba, Na, self.num_heads, self.head_dim * 3)
+            .permute(0, 2, 3, 1)                          # (Ba, heads, 3*hd, Na)
+            .split([self.head_dim, self.head_dim, self.head_dim], dim=2)
+        )
+        # q, k, v each: (Ba, num_heads, head_dim, Na)
+
+        # --- Scaled dot-product attention ------------------------------------
+        # attn: (Ba, heads, Na, Na)  — attention map within each strip
+        attn = (q.transpose(-2, -1) @ k) * (self.head_dim ** -0.5)
+        attn = attn.softmax(dim=-1)
+
+        # x_attn: (Ba, heads, head_dim, Na)
+        x_attn = v @ attn.transpose(-2, -1)
+
+        # --- Merge head and spatial dims -------------------------------------
+        # (Ba, heads, head_dim, Na) → (Ba, Na, all_head_dim)
+        x_attn = x_attn.permute(0, 3, 1, 2).reshape(Ba, Na, self.all_head_dim)
+        v_flat  = v.permute(0, 3, 1, 2).reshape(Ba, Na, self.all_head_dim)
+
+        # --- Undo the area split: merge strips back into the batch -----------
+        #   (B * area, N // area, all_head_dim) → (B, N, all_head_dim)
+        if self.area > 1:
+            x_attn = x_attn.reshape(B, N, self.all_head_dim)
+            v_flat  = v_flat.reshape(B, N, self.all_head_dim)
+
+        # --- Back to spatial layout: (B, all_head_dim, H, W) ----------------
+        out      = x_attn.reshape(B, H, W, self.all_head_dim).permute(0, 3, 1, 2).contiguous()
+        v_spatial = v_flat.reshape(B, H, W, self.all_head_dim).permute(0, 3, 1, 2).contiguous()
+
+        # Undo the H↔W transpose for the horizontal branch
+        if not vertical:
+            out       = out.transpose(2, 3)        # (B, all_head_dim, H_orig, W_orig)
+            v_spatial = v_spatial.transpose(2, 3)
+            H, W = W, H                            # restore for caller (not strictly needed)
+
+        return out, v_spatial
+
+    # ------------------------------------------------------------------
+    # Forward
+    # ------------------------------------------------------------------
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply Cross-Area Attention to the input feature map.
+
+        The forward pass runs two area-attention branches in parallel:
+          - Vertical branch  : strips of shape (H/area, W)   → captures top/bottom context
+          - Horizontal branch: strips of shape (H, W/area)   → captures left/right context
+
+        Their outputs are fused as:
+            out = sigmoid(alpha) * out_V + (1 - sigmoid(alpha)) * out_H
+
+        where alpha is a learned per-head scalar parameter.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, C, H, W).
+                              H must be divisible by `area`, W must be divisible by `area`.
+
+        Returns:
+            (torch.Tensor): Output tensor of shape (B, C, H, W).
+        """
+        B, _, H, W = x.shape
+
+        assert H % self.area == 0, (
+            f"Height {H} must be divisible by area {self.area}"
+        )
+        assert W % self.area == 0, (
+            f"Width {W} must be divisible by area {self.area}"
+        )
+
+        # ---- Vertical branch : attention within (H/area, W) strips ---------
+        out_v, v_v = self._area_attention(self.qkv_v, x, B, H, W, vertical=True)
+
+        # ---- Horizontal branch : attention within (H, W/area) strips -------
+        out_h, v_h = self._area_attention(self.qkv_h, x, B, H, W, vertical=False)
+
+        # ---- Add position encodings (one per branch, same role as AAttn) ----
+        out_v = out_v + self.pe_v(v_v)
+        out_h = out_h + self.pe_h(v_h)
+
+        # ---- Learned per-head fusion ----------------------------------------
+        # alpha shape: (1, num_heads, 1, 1) broadcast over (B, num_heads, H, W)
+        # We reshape out_v / out_h to expose the head dimension for the weighting,
+        # then collapse it back into channels.
+        alpha = self.alpha.sigmoid()     # (1, num_heads, 1, 1)  ∈ (0, 1)
+
+        # (B, all_head_dim, H, W) → (B, num_heads, head_dim, H, W)
+        out_v_h = out_v.view(B, self.num_heads, self.head_dim, H, W)
+        out_h_h = out_h.view(B, self.num_heads, self.head_dim, H, W)
+
+        # Weighted sum — alpha broadcasts over head_dim, H, W
+        fused = alpha * out_v_h + (1.0 - alpha) * out_h_h   # (B, num_heads, head_dim, H, W)
+
+        # Collapse heads back into channels
+        fused = fused.view(B, self.all_head_dim, H, W)       # (B, all_head_dim, H, W)
+
+        return self.proj(fused)
+
+
+
+class CABlock(nn.Module):
+    """Area-attention block module for efficient feature extraction in YOLO models.
+
+    This module implements an area-attention mechanism combined with a feed-forward network for processing feature maps.
+    It uses a novel area-based attention approach that is more efficient than traditional self-attention while
+    maintaining effectiveness.
+
+    Attributes:
+        attn (AAttn): Area-attention module for processing spatial features.
+        mlp (nn.Sequential): Multi-layer perceptron for feature transformation.
+
+    Methods:
+        _init_weights: Initializes module weights using truncated normal distribution.
+        forward: Applies area-attention and feed-forward processing to input tensor.
+
+    Examples:
+        >>> block = ABlock(dim=256, num_heads=8, mlp_ratio=1.2, area=1)
+        >>> x = torch.randn(1, 256, 32, 32)
+        >>> output = block(x)
+        >>> print(output.shape)
+        torch.Size([1, 256, 32, 32])
+    """
+
+    def __init__(self, dim: int, num_heads: int, mlp_ratio: float = 1.2, area: int = 1):
+        """Initialize an Area-attention block module.
+
+        Args:
+            dim (int): Number of input channels.
+            num_heads (int): Number of heads into which the attention mechanism is divided.
+            mlp_ratio (float): Expansion ratio for MLP hidden dimension.
+            area (int): Number of areas the feature map is divided into.
+        """
+        super().__init__()
+
+        self.attn = CAAttn(dim, num_heads=num_heads, area=area)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = nn.Sequential(Conv(dim, mlp_hidden_dim, 1), Conv(mlp_hidden_dim, dim, 1, act=False))
+
+        self.apply(self._init_weights)
+
+    @staticmethod
+    def _init_weights(m: nn.Module):
+        """Initialize weights using a truncated normal distribution.
+
+        Args:
+            m (nn.Module): Module to initialize.
+        """
+        if isinstance(m, nn.Conv2d):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through ABlock.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            (torch.Tensor): Output tensor after area-attention and feed-forward processing.
+        """
+        x = x + self.attn(x)
+        return x + self.mlp(x)
+
+
+class CA2C2f(nn.Module):
+    """Area-Attention C2f module for enhanced feature extraction with area-based attention mechanisms.
+
+    This module extends the C2f architecture by incorporating area-attention and ABlock layers for improved feature
+    processing. It supports both area-attention and standard convolution modes.
+
+    Attributes:
+        cv1 (Conv): Initial 1x1 convolution layer that reduces input channels to hidden channels.
+        cv2 (Conv): Final 1x1 convolution layer that processes concatenated features.
+        gamma (nn.Parameter | None): Learnable parameter for residual scaling when using area attention.
+        m (nn.ModuleList): List of either ABlock or C3k modules for feature processing.
+
+    Methods:
+        forward: Processes input through area-attention or standard convolution pathway.
+
+    Examples:
+        >>> m = A2C2f(512, 512, n=1, a2=True, area=1)
+        >>> x = torch.randn(1, 512, 32, 32)
+        >>> output = m(x)
+        >>> print(output.shape)
+        torch.Size([1, 512, 32, 32])
+    """
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        a2: bool = True,
+        area: int = 1,
+        residual: bool = False,
+        mlp_ratio: float = 2.0,
+        e: float = 0.5,
+        g: int = 1,
+        shortcut: bool = True,
+    ):
+        """Initialize Area-Attention C2f module.
+
+        Args:
+            c1 (int): Number of input channels.
+            c2 (int): Number of output channels.
+            n (int): Number of ABlock or C3k modules to stack.
+            a2 (bool): Whether to use area attention blocks. If False, uses C3k blocks instead.
+            area (int): Number of areas the feature map is divided into.
+            residual (bool): Whether to use residual connections with learnable gamma parameter.
+            mlp_ratio (float): Expansion ratio for MLP hidden dimension.
+            e (float): Channel expansion ratio for hidden channels.
+            g (int): Number of groups for grouped convolutions.
+            shortcut (bool): Whether to use shortcut connections in C3k blocks.
+        """
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        assert c_ % 32 == 0, "Dimension of ABlock must be a multiple of 32."
+
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv((1 + n) * c_, c2, 1)
+
+        self.gamma = nn.Parameter(0.01 * torch.ones(c2), requires_grad=True) if a2 and residual else None
+        self.m = nn.ModuleList(
+            nn.Sequential(*(CABlock(c_, c_ // 32, mlp_ratio, area) for _ in range(2)))
+            if a2
+            else C3k(c_, c_, 2, shortcut, g)
+            for _ in range(n)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through A2C2f layer.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            (torch.Tensor): Output tensor after processing.
+        """
+        y = [self.cv1(x)]
+        y.extend(m(y[-1]) for m in self.m)
+        y = self.cv2(torch.cat(y, 1))
+        if self.gamma is not None:
+            return x + self.gamma.view(-1, self.gamma.shape[0], 1, 1) * y
+        return y
