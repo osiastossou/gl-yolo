@@ -2071,7 +2071,7 @@ class RealNVP(nn.Module):
 class CAAttn(nn.Module):
     """Cross-Area Attention module combining vertical and horizontal area attention.
 
-    Extends Area Attention (AAttn) by computing attention in both vertical and horizontal
+    Extends Area Attention (CAAttn) by computing attention in both vertical and horizontal
     directions in parallel, then fusing the outputs with a learned scalar alpha per head.
     This captures both axis-aligned dependencies in a single forward pass, at the cost of
     roughly 2x the computation of a single-direction AAttn (still cheaper than global attention).
@@ -2090,7 +2090,7 @@ class CAAttn(nn.Module):
                               alpha → 1 privileges vertical, alpha → 0 privileges horizontal.
 
     Examples:
-        >>> attn = CrossAAttn(dim=256, num_heads=8, area=4)
+        >>> attn = CAAttn(dim=256, num_heads=8, area=4)
         >>> x = torch.randn(1, 256, 32, 32)
         >>> output = attn(x)
         >>> print(output.shape)
@@ -2098,7 +2098,7 @@ class CAAttn(nn.Module):
     """
 
     def __init__(self, dim: int, num_heads: int, area: int = 4):
-        """Initialize CrossAAttn module.
+        """Initialize CAAttn module.
 
         Args:
             dim (int): Number of input/output channels.
@@ -2128,7 +2128,8 @@ class CAAttn(nn.Module):
 
         # Learned fusion weight: one scalar per head, shared across spatial positions.
         # sigmoid(alpha) ∈ (0,1): controls how much weight goes to the vertical branch.
-        self.alpha = nn.Parameter(torch.zeros(1, num_heads, 1, 1))
+        # Extra singleton dim allows broadcasting over head_dim, H, W.
+        self.alpha = nn.Parameter(torch.zeros(1, num_heads, 1, 1, 1))
 
     # ------------------------------------------------------------------
     # Internal helper
@@ -2309,7 +2310,7 @@ class CABlock(nn.Module):
         forward: Applies area-attention and feed-forward processing to input tensor.
 
     Examples:
-        >>> block = ABlock(dim=256, num_heads=8, mlp_ratio=1.2, area=1)
+        >>> block = CABlock(dim=256, num_heads=8, mlp_ratio=1.2, area=1)
         >>> x = torch.randn(1, 256, 32, 32)
         >>> output = block(x)
         >>> print(output.shape)
@@ -2374,7 +2375,7 @@ class CA2C2f(nn.Module):
         forward: Processes input through area-attention or standard convolution pathway.
 
     Examples:
-        >>> m = A2C2f(512, 512, n=1, a2=True, area=1)
+        >>> m = CA2C2f(512, 512, n=1, a2=True, area=1)
         >>> x = torch.randn(1, 512, 32, 32)
         >>> output = m(x)
         >>> print(output.shape)

@@ -29,8 +29,6 @@ def main(modelpath, data, outname,epochs):
 
     model = model.load("yolo12n.pt")
 
-
-
     # --- 2. ENTRAÎNEMENT AVEC CONFIGURATION CUSTOMISÉE ---
     # On lance l'entraînement en passant notre architecture customisée
     # via l'argument 'cfg'. La librairie va alors reconstruire le graphe
