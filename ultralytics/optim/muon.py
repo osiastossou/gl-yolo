@@ -88,7 +88,7 @@ def muon_update(grad: torch.Tensor, momentum: torch.Tensor, beta: float = 0.95, 
         - Final update is scaled by sqrt(max(1, dim[-2] / dim[-1])) to account for parameter dimensions.
     """
     momentum.lerp_(grad, 1 - beta)
-    # update = grad.lerp(momentum, beta) if nesterov else momentum
+    update = grad.lerp(momentum, beta) if nesterov else momentum
 
     if update.ndim == 1:  # bias / scale / 1D params should skip orthogonalization
         return update
