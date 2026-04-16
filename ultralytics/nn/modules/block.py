@@ -2444,3 +2444,109 @@ class CA2C2f(nn.Module):
         if self.gamma is not None:
             return x + self.gamma.view(-1, self.gamma.shape[0], 1, 1) * y
         return y
+
+
+
+class GL_CAB_CABlock(nn.Module):
+
+    """
+    Implementation of the Global-Local Combined Attention Block (GL-CAB)
+    from the paper "Global-Local Attention Mechanism Based Small Object Detection".
+    
+    This module creates an attention map by combining global context, local features,
+    and local detail features to emphasize small objects that might be lost.
+    """
+    def __init__(
+        self,
+        c1,
+        c2=None,
+        n=2,
+        a2=True,
+        area=1,
+        residual=False,
+        mlp_ratio=2.0,
+        e=0.5,
+        g=1,
+        shortcut=True,
+    ):
+        # c1: input channels
+        # c2: output channels (defaults to c1 if not provided)
+        super(GL_CAB_CABlock, self).__init__()
+        if c2 is None:
+            c2 = c1
+
+        self.c1 = c1
+        self.c2 = c2
+        self.n = n
+
+        num_heads = max(1, self.c1 // 64)
+        if a2:
+            self.m = nn.Sequential(*(CABlock(self.c1, num_heads=num_heads, mlp_ratio=mlp_ratio, area=area) for _ in range(n)))
+        else:
+            self.m = nn.Sequential(*(nn.Identity() for _ in range(n)))
+
+        # A reusable 1x1 convolution block with BatchNorm
+        def conv_block(in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+        # --- Path for Global Features: G(P) in the paper ---
+        # Captures the overall scene context.
+        self.global_features_path = nn.Sequential(
+            conv_block(c1, c1),
+            nn.ReLU()
+        )
+
+        # --- Path for Local Features: Z(P) in the paper ---
+        # Focuses on local information without global context.
+        self.local_features_path = nn.Sequential(
+            conv_block(c1, c1),
+            nn.SiLU()
+        )
+
+        # --- Path for Local Detail Features: L(P) in the paper ---
+        # Refines details using global context as a guide.
+        # This path takes the output of the global average pooling.
+        self.local_detail_path = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1), # Global Average Pooling
+            nn.Conv2d(c1, c1, kernel_size=1, bias=False),
+            nn.SiLU()
+        )
+        
+        self.sigmoid = nn.Sigmoid()
+        
+        # Final convolution to ensure the output channel count is correct
+        self.final_conv = nn.Conv2d(c1, c2, kernel_size=1) if c1 != c2 else nn.Identity()
+
+    def forward(self, x,n=2):
+        """
+        Forward pass of the GL-CAB module.
+        Follows Formula (5): W(P) = σ(L(P) ⊕ Z(P)) ⊗ G(P)
+        The attention map is applied to the globally-processed features.
+        """
+        # P is the input tensor x
+        
+        # G(P): Processed global features
+        global_features_processed = self.global_features_path(x)
+
+        global_features_processed = self.m(global_features_processed)
+        
+        # L(P): Local details derived from global context
+        local_detail_features = self.local_detail_path(x)
+        
+        # Z(P): Processed local features
+        local_features_processed = self.local_features_path(x)
+        
+        # L(P) ⊕ Z(P): Fusion of local and detail features (element-wise addition)
+        fused_local_info = local_detail_features + local_features_processed
+        
+        # σ(...): The sigmoid function creates the final attention map
+        attention_map = self.sigmoid(fused_local_info)
+        
+        # ⊗ G(P): The attention map is applied to the processed global features
+        out = attention_map * global_features_processed
+        
+        return self.final_conv(out)
+

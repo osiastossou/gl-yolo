@@ -275,7 +275,19 @@ class GL_CAB_PSABlock(nn.Module):
     This module creates an attention map by combining global context, local features,
     and local detail features to emphasize small objects that might be lost.
     """
-    def __init__(self, c1, c2=None, n=2):
+    def __init__(
+        self,
+        c1,
+        c2=None,
+        n=2,
+        a2=True,
+        area=1,
+        residual=False,
+        mlp_ratio=2.0,
+        e=0.5,
+        g=1,
+        shortcut=True,
+    ):
         # c1: input channels
         # c2: output channels (defaults to c1 if not provided)
         super(GL_CAB_PSABlock, self).__init__()
@@ -286,7 +298,11 @@ class GL_CAB_PSABlock(nn.Module):
         self.c2 = c2
         self.n = n
 
-        self.m = nn.Sequential(*(PSABlock(self.c1, attn_ratio=0.5, num_heads=self.c1 // 64) for _ in range(n)))
+        num_heads = max(1, self.c1 // 64)
+        if a2:
+            self.m = nn.Sequential(*(CABlock(self.c1, num_heads=num_heads, mlp_ratio=mlp_ratio, area=area) for _ in range(n)))
+        else:
+            self.m = nn.Sequential(*(nn.Identity() for _ in range(n)))
             
         # A reusable 1x1 convolution block with BatchNorm
         def conv_block(in_channels, out_channels):
