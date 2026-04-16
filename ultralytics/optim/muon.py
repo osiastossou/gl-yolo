@@ -88,11 +88,22 @@ def muon_update(grad: torch.Tensor, momentum: torch.Tensor, beta: float = 0.95, 
         - Final update is scaled by sqrt(max(1, dim[-2] / dim[-1])) to account for parameter dimensions.
     """
     momentum.lerp_(grad, 1 - beta)
+    # update = grad.lerp(momentum, beta) if nesterov else momentum
+    # if update.ndim == 4:  # for the case of conv filters
+    #     update = update.view(len(update), -1)
+    # update = zeropower_via_newtonschulz5(update)
+    # update *= max(1, grad.size(-2) / grad.size(-1)) ** 0.5
+    # return update
+
     update = grad.lerp(momentum, beta) if nesterov else momentum
-    if update.ndim == 4:  # for the case of conv filters
-        update = update.view(len(update), -1)
+    if update.ndim == 1:  # bias / scale / 1D params should skip orthogonalization
+        return update
+    if update.ndim >= 2:
+        update = update.flatten(1)
     update = zeropower_via_newtonschulz5(update)
     update *= max(1, grad.size(-2) / grad.size(-1)) ** 0.5
+    if grad.ndim > 1:
+        return update.view(grad.shape)
     return update
 
 
