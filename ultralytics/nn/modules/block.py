@@ -2142,6 +2142,7 @@ class CAAttn(nn.Module):
         B: int,
         H: int,
         W: int,
+        area: int,
         vertical: bool,
     ):
         """Run one directional area-attention branch.
@@ -2187,8 +2188,8 @@ class CAAttn(nn.Module):
         # batched matmul handles each strip independently — exactly like AAttn.
         #   Before: (B,          N,          3*all_head_dim)
         #   After:  (B * area,   N // area,  3*all_head_dim)
-        if self.area > 1:
-            qkv = qkv.reshape(B * self.area, N // self.area, self.all_head_dim * 3)
+        if area > 1:
+            qkv = qkv.reshape(B * area, N // area, self.all_head_dim * 3)
 
         Ba, Na, _ = qkv.shape   # Ba = B*area (or B when area=1)
 
@@ -2216,7 +2217,7 @@ class CAAttn(nn.Module):
 
         # --- Undo the area split: merge strips back into the batch -----------
         #   (B * area, N // area, all_head_dim) → (B, N, all_head_dim)
-        if self.area > 1:
+        if area > 1:
             x_attn = x_attn.reshape(B, N, self.all_head_dim)
             v_flat  = v_flat.reshape(B, N, self.all_head_dim)
 
@@ -2257,18 +2258,22 @@ class CAAttn(nn.Module):
         """
         B, _, H, W = x.shape
 
-        assert H % self.area == 0, (
-            f"Height {H} must be divisible by area {self.area}"
-        )
-        assert W % self.area == 0, (
-            f"Width {W} must be divisible by area {self.area}"
-        )
+        # Choose the largest valid area divisor for each spatial dimension.
+        # This avoids failures when the feature map height/width is not divisible by self.area.
+        def _valid_area(value: int, max_area: int) -> int:
+            for a in range(max_area, 0, -1):
+                if value % a == 0:
+                    return a
+            return 1
 
-        # ---- Vertical branch : attention within (H/area, W) strips ---------
-        out_v, v_v = self._area_attention(self.qkv_v, x, B, H, W, vertical=True)
+        area_v = _valid_area(H, self.area)
+        area_h = _valid_area(W, self.area)
 
-        # ---- Horizontal branch : attention within (H, W/area) strips -------
-        out_h, v_h = self._area_attention(self.qkv_h, x, B, H, W, vertical=False)
+        # ---- Vertical branch : attention within (H/area_v, W) strips ---------
+        out_v, v_v = self._area_attention(self.qkv_v, x, B, H, W, area_v, vertical=True)
+
+        # ---- Horizontal branch : attention within (H, W/area_h) strips -------
+        out_h, v_h = self._area_attention(self.qkv_h, x, B, H, W, area_h, vertical=False)
 
         # ---- Add position encodings (one per branch, same role as AAttn) ----
         out_v = out_v + self.pe_v(v_v)
