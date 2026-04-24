@@ -2071,10 +2071,10 @@ class RealNVP(nn.Module):
 class CAAttn(nn.Module):
     """Cross-Area Attention module combining vertical and horizontal area attention.
 
-    Extends Area Attention (CAAttn) by computing attention in both vertical and horizontal
-    directions in parallel, then fusing the outputs with a learned scalar alpha per head.
-    This captures both axis-aligned dependencies in a single forward pass, at the cost of
-    roughly 2x the computation of a single-direction AAttn (still cheaper than global attention).
+    Extends Area Attention (CAAttn) by computing attention in both vertical and horizontal directions in parallel, then
+    fusing the outputs with a learned scalar alpha per head. This captures both axis-aligned dependencies in a single
+    forward pass, at the cost of roughly 2x the computation of a single-direction AAttn (still cheaper than global
+    attention).
 
     Attributes:
         area (int): Number of areas (l) the feature map is divided into per direction.
@@ -2086,8 +2086,8 @@ class CAAttn(nn.Module):
         proj (Conv): Final output projection.
         pe_v (Conv): Position encoding (depthwise conv) for the vertical branch.
         pe_h (Conv): Position encoding (depthwise conv) for the horizontal branch.
-        alpha (nn.Parameter): Learned per-head fusion weight in [0, 1].
-                              alpha → 1 privileges vertical, alpha → 0 privileges horizontal.
+        alpha (nn.Parameter): Learned per-head fusion weight in [0, 1]. alpha → 1 privileges vertical, alpha → 0
+            privileges horizontal.
 
     Examples:
         >>> attn = CAAttn(dim=256, num_heads=8, area=4)
@@ -2103,9 +2103,8 @@ class CAAttn(nn.Module):
         Args:
             dim (int): Number of input/output channels.
             num_heads (int): Number of attention heads.
-            area (int): Number of strips l per direction. The vertical branch splits
-                        the feature map into l horizontal strips of shape (H/l, W),
-                        and the horizontal branch into l vertical strips of shape (H, W/l).
+            area (int): Number of strips l per direction. The vertical branch splits the feature map into l horizontal
+                strips of shape (H/l, W), and the horizontal branch into l vertical strips of shape (H, W/l).
         """
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} must be divisible by num_heads {num_heads}"
@@ -2161,8 +2160,7 @@ class CAAttn(nn.Module):
             B (int): Original batch size.
             H (int): Feature map height.
             W (int): Feature map width.
-            vertical (bool): If True, split along H (vertical strips).
-                             If False, split along W (horizontal strips).
+            vertical (bool): If True, split along H (vertical strips). If False, split along W (horizontal strips).
 
         Returns:
             tuple[torch.Tensor, torch.Tensor]:
@@ -2173,7 +2171,7 @@ class CAAttn(nn.Module):
         # For the horizontal branch, transpose H and W so we can reuse
         # exactly the same vertical-strip logic — then transpose back at the end.
         if not vertical:
-            x = x.transpose(2, 3)          # (B, C, W, H)  ← swap H and W
+            x = x.transpose(2, 3)  # (B, C, W, H)  ← swap H and W
             H, W = W, H
 
         N = H * W
@@ -2181,7 +2179,7 @@ class CAAttn(nn.Module):
         # --- QKV projection -------------------------------------------------
         # qkv_proj is a 1×1 Conv: (B, C, H, W) → (B, 3*all_head_dim, H, W)
         # We flatten spatial dims and put them on dim-1 for the attention math.
-        qkv = qkv_proj(x).flatten(2).transpose(1, 2)   # (B, N, 3*all_head_dim)
+        qkv = qkv_proj(x).flatten(2).transpose(1, 2)  # (B, N, 3*all_head_dim)
 
         # --- Reshape into area strips ----------------------------------------
         # Merge the `area` strips into the batch dimension so that PyTorch's
@@ -2191,20 +2189,20 @@ class CAAttn(nn.Module):
         if area > 1:
             qkv = qkv.reshape(B * area, N // area, self.all_head_dim * 3)
 
-        Ba, Na, _ = qkv.shape   # Ba = B*area (or B when area=1)
+        Ba, Na, _ = qkv.shape  # Ba = B*area (or B when area=1)
 
         # --- Split into Q, K, V and reshape for multi-head attention ---------
         # Shape after view+permute: (Ba, num_heads, head_dim, Na)
         q, k, v = (
             qkv.view(Ba, Na, self.num_heads, self.head_dim * 3)
-            .permute(0, 2, 3, 1)                          # (Ba, heads, 3*hd, Na)
+            .permute(0, 2, 3, 1)  # (Ba, heads, 3*hd, Na)
             .split([self.head_dim, self.head_dim, self.head_dim], dim=2)
         )
         # q, k, v each: (Ba, num_heads, head_dim, Na)
 
         # --- Scaled dot-product attention ------------------------------------
         # attn: (Ba, heads, Na, Na)  — attention map within each strip
-        attn = (q.transpose(-2, -1) @ k) * (self.head_dim ** -0.5)
+        attn = (q.transpose(-2, -1) @ k) * (self.head_dim**-0.5)
         attn = attn.softmax(dim=-1)
 
         # x_attn: (Ba, heads, head_dim, Na)
@@ -2213,23 +2211,23 @@ class CAAttn(nn.Module):
         # --- Merge head and spatial dims -------------------------------------
         # (Ba, heads, head_dim, Na) → (Ba, Na, all_head_dim)
         x_attn = x_attn.permute(0, 3, 1, 2).reshape(Ba, Na, self.all_head_dim)
-        v_flat  = v.permute(0, 3, 1, 2).reshape(Ba, Na, self.all_head_dim)
+        v_flat = v.permute(0, 3, 1, 2).reshape(Ba, Na, self.all_head_dim)
 
         # --- Undo the area split: merge strips back into the batch -----------
         #   (B * area, N // area, all_head_dim) → (B, N, all_head_dim)
         if area > 1:
             x_attn = x_attn.reshape(B, N, self.all_head_dim)
-            v_flat  = v_flat.reshape(B, N, self.all_head_dim)
+            v_flat = v_flat.reshape(B, N, self.all_head_dim)
 
         # --- Back to spatial layout: (B, all_head_dim, H, W) ----------------
-        out      = x_attn.reshape(B, H, W, self.all_head_dim).permute(0, 3, 1, 2).contiguous()
+        out = x_attn.reshape(B, H, W, self.all_head_dim).permute(0, 3, 1, 2).contiguous()
         v_spatial = v_flat.reshape(B, H, W, self.all_head_dim).permute(0, 3, 1, 2).contiguous()
 
         # Undo the H↔W transpose for the horizontal branch
         if not vertical:
-            out       = out.transpose(2, 3)        # (B, all_head_dim, H_orig, W_orig)
+            out = out.transpose(2, 3)  # (B, all_head_dim, H_orig, W_orig)
             v_spatial = v_spatial.transpose(2, 3)
-            H, W = W, H                            # restore for caller (not strictly needed)
+            H, W = W, H  # restore for caller (not strictly needed)
 
         return out, v_spatial
 
@@ -2250,8 +2248,8 @@ class CAAttn(nn.Module):
         where alpha is a learned per-head scalar parameter.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (B, C, H, W).
-                              H must be divisible by `area`, W must be divisible by `area`.
+            x (torch.Tensor): Input tensor of shape (B, C, H, W). H must be divisible by `area`, W must be divisible by
+                `area`.
 
         Returns:
             (torch.Tensor): Output tensor of shape (B, C, H, W).
@@ -2283,20 +2281,19 @@ class CAAttn(nn.Module):
         # alpha shape: (1, num_heads, 1, 1) broadcast over (B, num_heads, H, W)
         # We reshape out_v / out_h to expose the head dimension for the weighting,
         # then collapse it back into channels.
-        alpha = self.alpha.sigmoid()     # (1, num_heads, 1, 1)  ∈ (0, 1)
+        alpha = self.alpha.sigmoid()  # (1, num_heads, 1, 1)  ∈ (0, 1)
 
         # (B, all_head_dim, H, W) → (B, num_heads, head_dim, H, W)
         out_v_h = out_v.view(B, self.num_heads, self.head_dim, H, W)
         out_h_h = out_h.view(B, self.num_heads, self.head_dim, H, W)
 
         # Weighted sum — alpha broadcasts over head_dim, H, W
-        fused = alpha * out_v_h + (1.0 - alpha) * out_h_h   # (B, num_heads, head_dim, H, W)
+        fused = alpha * out_v_h + (1.0 - alpha) * out_h_h  # (B, num_heads, head_dim, H, W)
 
         # Collapse heads back into channels
-        fused = fused.view(B, self.all_head_dim, H, W)       # (B, all_head_dim, H, W)
+        fused = fused.view(B, self.all_head_dim, H, W)  # (B, all_head_dim, H, W)
 
         return self.proj(fused)
-
 
 
 class CABlock(nn.Module):
@@ -2446,16 +2443,14 @@ class CA2C2f(nn.Module):
         return y
 
 
-
 class GL_CAB_CABlock(nn.Module):
+    """Implementation of the Global-Local Combined Attention Block (GL-CAB) from the paper "Global-Local Attention
+    Mechanism Based Small Object Detection".
 
+    This module creates an attention map by combining global context, local features, and local detail features to
+    emphasize small objects that might be lost.
     """
-    Implementation of the Global-Local Combined Attention Block (GL-CAB)
-    from the paper "Global-Local Attention Mechanism Based Small Object Detection".
-    
-    This module creates an attention map by combining global context, local features,
-    and local detail features to emphasize small objects that might be lost.
-    """
+
     def __init__(
         self,
         c1,
@@ -2471,7 +2466,7 @@ class GL_CAB_CABlock(nn.Module):
     ):
         # c1: input channels
         # c2: output channels (defaults to c1 if not provided)
-        super(GL_CAB_CABlock, self).__init__()
+        super().__init__()
         if c2 is None:
             c2 = c1
 
@@ -2481,72 +2476,64 @@ class GL_CAB_CABlock(nn.Module):
 
         num_heads = max(1, self.c1 // 64)
         if a2:
-            self.m = nn.Sequential(*(CABlock(self.c1, num_heads=num_heads, mlp_ratio=mlp_ratio, area=area) for _ in range(n)))
+            self.m = nn.Sequential(
+                *(CABlock(self.c1, num_heads=num_heads, mlp_ratio=mlp_ratio, area=area) for _ in range(n))
+            )
         else:
             self.m = nn.Sequential(*(nn.Identity() for _ in range(n)))
 
         # A reusable 1x1 convolution block with BatchNorm
         def conv_block(in_channels, out_channels):
             return nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels)
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False), nn.BatchNorm2d(out_channels)
             )
 
         # --- Path for Global Features: G(P) in the paper ---
         # Captures the overall scene context.
-        self.global_features_path = nn.Sequential(
-            conv_block(c1, c1),
-            nn.ReLU()
-        )
+        self.global_features_path = nn.Sequential(conv_block(c1, c1), nn.ReLU())
 
         # --- Path for Local Features: Z(P) in the paper ---
         # Focuses on local information without global context.
-        self.local_features_path = nn.Sequential(
-            conv_block(c1, c1),
-            nn.SiLU()
-        )
+        self.local_features_path = nn.Sequential(conv_block(c1, c1), nn.SiLU())
 
         # --- Path for Local Detail Features: L(P) in the paper ---
         # Refines details using global context as a guide.
         # This path takes the output of the global average pooling.
         self.local_detail_path = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1), # Global Average Pooling
+            nn.AdaptiveAvgPool2d(1),  # Global Average Pooling
             nn.Conv2d(c1, c1, kernel_size=1, bias=False),
-            nn.SiLU()
+            nn.SiLU(),
         )
-        
+
         self.sigmoid = nn.Sigmoid()
-        
+
         # Final convolution to ensure the output channel count is correct
         self.final_conv = nn.Conv2d(c1, c2, kernel_size=1) if c1 != c2 else nn.Identity()
 
-    def forward(self, x,n=2):
-        """
-        Forward pass of the GL-CAB module.
-        Follows Formula (5): W(P) = σ(L(P) ⊕ Z(P)) ⊗ G(P)
-        The attention map is applied to the globally-processed features.
+    def forward(self, x, n=2):
+        """Forward pass of the GL-CAB module. Follows Formula (5): W(P) = σ(L(P) ⊕ Z(P)) ⊗ G(P) The attention map is
+        applied to the globally-processed features.
         """
         # P is the input tensor x
-        
+
         # G(P): Processed global features
         global_features_processed = self.global_features_path(x)
 
         global_features_processed = self.m(global_features_processed)
-        
+
         # L(P): Local details derived from global context
         local_detail_features = self.local_detail_path(x)
-        
+
         # Z(P): Processed local features
         local_features_processed = self.local_features_path(x)
-        
+
         # L(P) ⊕ Z(P): Fusion of local and detail features (element-wise addition)
         fused_local_info = local_detail_features + local_features_processed
-        
+
         # σ(...): The sigmoid function creates the final attention map
         attention_map = self.sigmoid(fused_local_info)
-        
+
         # ⊗ G(P): The attention map is applied to the processed global features
         out = attention_map * global_features_processed
-        
-        return self.final_conv(out)
 
+        return self.final_conv(out)

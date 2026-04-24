@@ -1,9 +1,7 @@
 import torch
 from torch import nn
-from ultralytics.nn.modules import (
-    Bottleneck,
-    BottleneckCSP
-)
+
+from ultralytics.nn.modules import Bottleneck
 
 
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
@@ -17,6 +15,7 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
 
 class Conv(nn.Module):
     """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
+
     default_act = nn.SiLU()  # default activation
 
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
@@ -88,11 +87,7 @@ class DCCAtt(nn.Module):
         super().__init__()
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Conv2d(channels, channels, 1, 1, 0, bias=True)
-        self.conv = nn.Sequential(
-            nn.Conv2d(2, 1, kernel_size=1),
-            nn.LayerNorm(channels),
-            nn.ReLU(inplace=True)
-        )
+        self.conv = nn.Sequential(nn.Conv2d(2, 1, kernel_size=1), nn.LayerNorm(channels), nn.ReLU(inplace=True))
         self.act = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor):
@@ -109,7 +104,6 @@ class DCCAtt(nn.Module):
 
 
 class DCMSA(nn.Module):
-
     def __init__(self, c1, c2, DC=True, scale=2):
         super().__init__()
         self.PDCCA = nn.Sequential(nn.Linear(c1, c2), nn.LayerNorm(c2), nn.ReLU(inplace=True))
@@ -135,7 +129,8 @@ class DCMSA(nn.Module):
 
 
 class MSFocus_Module(nn.Module):
-    """split and Focus"""
+    """Split and Focus."""
+
     default_act = nn.SiLU()  # default activation
 
     def __init__(self, c1=4, c2=64, k=1, s=1, scale=2, p=None, g=1, d=1, act=True):
@@ -160,7 +155,9 @@ class MSFocus_Module(nn.Module):
 class MSAF_Block(nn.Module):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
-    def __init__(self, c1, c2, n=1, shortcut=False, scale=2, use_att=True, DC=True, e=0.5, k=3, s=2, p=None, g=1, d=1, act=True):
+    def __init__(
+        self, c1, c2, n=1, shortcut=False, scale=2, use_att=True, DC=True, e=0.5, k=3, s=2, p=None, g=1, d=1, act=True
+    ):
         super().__init__()
         # MSConv
         self.conv_rgb = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
@@ -197,7 +194,7 @@ class MFSPPF_Module(nn.Module):
 
     def __init__(self, c1, c2, k=5, scale=2):  # equivalent to SPP(k=(5, 9, 13))
         super().__init__()
-        c1 = int((c2 + c2 // scale))
+        c1 = int(c2 + c2 // scale)
         c_ = c1 // 2
         self.cv1 = Conv(c1, c_, 1, 1)
         self.cv2 = Conv(c_ * 4, c2, 1, 1)
