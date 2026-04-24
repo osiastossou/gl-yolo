@@ -10,10 +10,9 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-#from Yolo11CBAM.custom_modules import CBAM,TransformerBlock, GL_CAB, GL_CAB_PSABlock,DilatedDepthwisePyramid,GL_CAB_ABlock
-#from Yolo11CBAM.GLD import MBFPN,GLCAB
-#from Yolo11CBAM.MSAF_YOLO_Module import MFSPPF_Module, MSAF_Block, MSConcat, MSFocus_Module
-
+# from Yolo11CBAM.custom_modules import CBAM,TransformerBlock, GL_CAB, GL_CAB_PSABlock,DilatedDepthwisePyramid,GL_CAB_ABlock
+# from Yolo11CBAM.GLD import MBFPN,GLCAB
+# from Yolo11CBAM.MSAF_YOLO_Module import MFSPPF_Module, MSAF_Block, MSConcat, MSFocus_Module
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
     AIFI,
@@ -41,6 +40,7 @@ from ultralytics.nn.modules import (
     C3Ghost,
     C3k2,
     C3x,
+    CA2C2f,
     CBFuse,
     CBLinear,
     Classify,
@@ -54,6 +54,7 @@ from ultralytics.nn.modules import (
     Focus,
     GhostBottleneck,
     GhostConv,
+    GL_CAB_CABlock,
     HGBlock,
     HGStem,
     ImagePoolingAttn,
@@ -76,8 +77,6 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     YOLOESegment26,
     v10Detect,
-    CA2C2f,
-    GL_CAB_CABlock
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1615,7 +1614,7 @@ def parse_model(d, ch, verbose=True):
             C2fCIB,
             A2C2f,
             CA2C2f,
-            GL_CAB_CABlock
+            GL_CAB_CABlock,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1636,7 +1635,7 @@ def parse_model(d, ch, verbose=True):
             C2PSA,
             A2C2f,
             CA2C2f,
-            GL_CAB_CABlock
+            GL_CAB_CABlock,
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
