@@ -11,7 +11,7 @@ from ultralytics import YOLO
 
 
 
-def main(modelpath, data, outname,epochs):
+def main(modelpath, data, outname,epochs,imgsz=640):
     """
     Fonction principale pour entraîner le modèle YOLOv11 customisé.
     """
@@ -42,7 +42,7 @@ def main(modelpath, data, outname,epochs):
         #data='/Users/osias/Documents/PHD/CODE/data/data.yaml',         # EXEMPLE: à remplacer par votre fichier de données
         data=data,   
         epochs=epochs,
-        imgsz=640,
+        imgsz=imgsz,
         batch=-1,
         device=0 if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',  
         amp=True,                # 0 pour le premier GPU, ou 'cpu'
@@ -67,11 +67,12 @@ if __name__ == '__main__':
     parser.add_argument('-data', type=str, required=True, help="Path to dataset .yaml file")
     parser.add_argument('-outname', type=str, required=True, help="Experiment output name")
     parser.add_argument('-epochs', type=int, required=True, help="Experiment output epochs")
+    parser.add_argument('-imgsz', type=int, default=640, help="Image size for training (default: 640)")
 
     args = parser.parse_args()
 
     # Appel de main avec les arguments
-    main(args.model, args.data, args.outname, args.epochs)
+    main(args.model, args.data, args.outname, args.epochs, args.imgsz)
 
 
     #python main.py -model 'Yolo11CBAM/yolov11n-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
