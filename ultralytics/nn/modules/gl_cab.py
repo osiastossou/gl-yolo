@@ -5,6 +5,39 @@ import torch.nn as nn
 from ultralytics.nn.modules.conv import Conv
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SPDConv — Space-to-Depth Convolution
+# ─────────────────────────────────────────────────────────────────────────────
+class SPDConv(nn.Module):
+    """
+    Remplace Conv(stride=2) sans perte d'information.
+
+    Réarrange (B, C, H, W) → (B, C·s², H/s, W/s) puis applique
+    une Conv stride=1. Aucun pixel n'est abandonné.
+
+    Args:
+        c1 (int): Canaux d'entrée.
+        c2 (int): Canaux de sortie.
+        k  (int): Taille noyau Conv suivant (défaut 3).
+        s  (int): Facteur space-to-depth (défaut 2).
+    """
+
+    def __init__(self, c1: int, c2: int, k: int = 3, s: int = 2):
+        super().__init__()
+        self.s = s
+        self.conv = Conv(c1 * s * s, c2, k, 1)   # stride=1 après rearrangement
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, C, H, W = x.shape
+        s = self.s
+        x = x.view(B, C, H // s, s, W // s, s)
+        x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
+        x = x.view(B, C * s * s, H // s, W // s)
+        return self.conv(x)
+
+
+
+
 class GL_CAB(nn.Module):
     """
     Global and Local Combined Attention Block.

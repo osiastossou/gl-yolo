@@ -107,7 +107,7 @@ from .transformer import (
     TransformerEncoderLayer,
     TransformerLayer,
 )
-from .gl_cab import GL_CAB, C2f_GLCAB
+from .gl_cab import GL_CAB, C2f_GLCAB,SPDConv
 
 __all__ = (
     "AIFI",
@@ -194,4 +194,5 @@ __all__ = (
     "v10Detect",
     "GL_CAB",
     "C2f_GLCAB",
+    "SPDConv"
 )
