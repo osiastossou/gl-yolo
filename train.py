@@ -27,7 +27,7 @@ def main(modelpath, data, outname,epochs,imgsz=640):
     model = YOLO(modelpath) 
     print("Modèle de base chargé.")
 
-    model = model.load("yolo12n.pt")
+    #model = model.load("yolo12n.pt")
 
     # --- 2. ENTRAÎNEMENT AVEC CONFIGURATION CUSTOMISÉE ---
     # On lance l'entraînement en passant notre architecture customisée
