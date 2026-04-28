@@ -77,7 +77,8 @@ from ultralytics.nn.modules import (
     YOLOESegment26,
     v10Detect,
     CA2C2f,
-    GL_CAB_CABlock
+    GL_CAB,
+    C2f_GLCAB,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1615,7 +1616,8 @@ def parse_model(d, ch, verbose=True):
             C2fCIB,
             A2C2f,
             CA2C2f,
-            GL_CAB_CABlock
+            GL_CAB,
+            C2f_GLCAB
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1636,7 +1638,8 @@ def parse_model(d, ch, verbose=True):
             C2PSA,
             A2C2f,
             CA2C2f,
-            GL_CAB_CABlock
+            GL_CAB,
+            C2f_GLCAB
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
@@ -1668,7 +1671,7 @@ def parse_model(d, ch, verbose=True):
                 legacy = False
                 if scale in "mlx":
                     args[3] = True
-            if m is A2C2f or m is CA2C2f or m is GL_CAB_CABlock:
+            if m is A2C2f or m is CA2C2f:
                 legacy = False
                 if scale in "lx":  # for L/X sizes
                     args.extend((True, 1.2))

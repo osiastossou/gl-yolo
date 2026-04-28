@@ -176,8 +176,6 @@ class GL_CAB1(nn.Module):
         out = att * fused                           # re-weighted features
         return out
 
-# mb_fpn.py
-
 from typing import List
 
 from ultralytics.nn.modules.block import PSABlock
@@ -271,7 +269,7 @@ class GL_CAB_PSABlock(nn.Module):
     """
     Implementation of the Global-Local Combined Attention Block (GL-CAB)
     from the paper "Global-Local Attention Mechanism Based Small Object Detection".
-    
+
     This module creates an attention map by combining global context, local features,
     and local detail features to emphasize small objects that might be lost.
     """
@@ -300,10 +298,10 @@ class GL_CAB_PSABlock(nn.Module):
 
         num_heads = max(1, self.c1 // 64)
         if a2:
-            self.m = nn.Sequential(*(CABlock(self.c1, num_heads=num_heads, mlp_ratio=mlp_ratio, area=area) for _ in range(n)))
+            self.m = nn.Sequential(*(PSABlock(self.c1, num_heads=num_heads, mlp_ratio=mlp_ratio, area=area) for _ in range(n)))
         else:
             self.m = nn.Sequential(*(nn.Identity() for _ in range(n)))
-            
+
         # A reusable 1x1 convolution block with BatchNorm
         def conv_block(in_channels, out_channels):
             return nn.Sequential(
@@ -333,9 +331,9 @@ class GL_CAB_PSABlock(nn.Module):
             nn.Conv2d(c1, c1, kernel_size=1, bias=False),
             nn.SiLU()
         )
-        
+
         self.sigmoid = nn.Sigmoid()
-        
+
         # Final convolution to ensure the output channel count is correct
         self.final_conv = nn.Conv2d(c1, c2, kernel_size=1) if c1 != c2 else nn.Identity()
 
@@ -346,166 +344,25 @@ class GL_CAB_PSABlock(nn.Module):
         The attention map is applied to the globally-processed features.
         """
         # P is the input tensor x
-        
+
         # G(P): Processed global features
         global_features_processed = self.global_features_path(x)
 
         global_features_processed = self.m(global_features_processed)
-        
+
         # L(P): Local details derived from global context
         local_detail_features = self.local_detail_path(x)
-        
+
         # Z(P): Processed local features
         local_features_processed = self.local_features_path(x)
-        
+
         # L(P) ⊕ Z(P): Fusion of local and detail features (element-wise addition)
         fused_local_info = local_detail_features + local_features_processed
-        
+
         # σ(...): The sigmoid function creates the final attention map
         attention_map = self.sigmoid(fused_local_info)
-        
+
         # ⊗ G(P): The attention map is applied to the processed global features
         out = attention_map * global_features_processed
-        
+
         return self.final_conv(out)
-
-
-
-class GL_CAB_ABlock(nn.Module):
-
-    """
-    Implementation of the Global-Local Combined Attention Block (GL-CAB)
-    from the paper "Global-Local Attention Mechanism Based Small Object Detection".
-    
-    This module creates an attention map by combining global context, local features,
-    and local detail features to emphasize small objects that might be lost.
-    """
-    def __init__(self, c1, c2=None, n=2):
-        # c1: input channels
-        # c2: output channels (defaults to c1 if not provided)
-        super(GL_CAB_ABlock, self).__init__()
-        if c2 is None:
-            c2 = c1
-
-        self.c1 = c1
-        self.c2 = c2
-        self.n = n
-
-        self.m = nn.Sequential(*(ABlock(dim=self.c1, num_heads=self.c1 // 64, mlp_ratio=1.2, area=1) for _ in range(n)))
-
-        
-            
-        # A reusable 1x1 convolution block with BatchNorm
-        def conv_block(in_channels, out_channels):
-            return nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels)
-            )
-
-        # --- Path for Global Features: G(P) in the paper ---
-        # Captures the overall scene context.
-        self.global_features_path = nn.Sequential(
-            conv_block(c1, c1),
-            nn.ReLU()
-        )
-
-        # --- Path for Local Features: Z(P) in the paper ---
-        # Focuses on local information without global context.
-        self.local_features_path = nn.Sequential(
-            conv_block(c1, c1),
-            nn.SiLU()
-        )
-
-        # --- Path for Local Detail Features: L(P) in the paper ---
-        # Refines details using global context as a guide.
-        # This path takes the output of the global average pooling.
-        self.local_detail_path = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1), # Global Average Pooling
-            nn.Conv2d(c1, c1, kernel_size=1, bias=False),
-            nn.SiLU()
-        )
-        
-        self.sigmoid = nn.Sigmoid()
-        
-        # Final convolution to ensure the output channel count is correct
-        self.final_conv = nn.Conv2d(c1, c2, kernel_size=1) if c1 != c2 else nn.Identity()
-
-    def forward(self, x,n=2):
-        """
-        Forward pass of the GL-CAB module.
-        Follows Formula (5): W(P) = σ(L(P) ⊕ Z(P)) ⊗ G(P)
-        The attention map is applied to the globally-processed features.
-        """
-        # P is the input tensor x
-        
-        # G(P): Processed global features
-        global_features_processed = self.global_features_path(x)
-
-        global_features_processed = self.m(global_features_processed)
-        
-        # L(P): Local details derived from global context
-        local_detail_features = self.local_detail_path(x)
-        
-        # Z(P): Processed local features
-        local_features_processed = self.local_features_path(x)
-        
-        # L(P) ⊕ Z(P): Fusion of local and detail features (element-wise addition)
-        fused_local_info = local_detail_features + local_features_processed
-        
-        # σ(...): The sigmoid function creates the final attention map
-        attention_map = self.sigmoid(fused_local_info)
-        
-        # ⊗ G(P): The attention map is applied to the processed global features
-        out = attention_map * global_features_processed
-        
-        return self.final_conv(out)
-
-
-
-
-
-# Dilated Depthwise Pyramid (Learnable SPPF)
-
-class DilatedDepthwisePyramid(nn.Module):
-    """
-    Learnable replacement of SPPF using Dilated Depthwise Convolutions.
-    
-    Structure:
-        - 1x1 Conv (channel reduction)
-        - 3 parallel depthwise conv with dilation = 1, 2, 3
-        - Concatenation
-        - 1x1 Conv (fusion)
-    """
-
-
-    def __init__(self, in_channels, out_channels, kernel_size=5, reduction=2):
-        super().__init__()
-        hidden_channels = in_channels // reduction
-
-        # Channel reduction (like YOLO SPPF)
-        self.cv1 = nn.Conv2d(in_channels, hidden_channels, 1, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(hidden_channels)
-        self.act1 = nn.SiLU()
-
-        # Dilated depthwise convolutions (multi-scale receptive field)
-        self.dw_convs = nn.ModuleList([
-            nn.Conv2d(
-                hidden_channels, hidden_channels,
-                kernel_size=kernel_size, stride=1, padding=d * (kernel_size // 2),
-                groups=hidden_channels, dilation=d, bias=False
-            ) for d in [1, 2, 3]
-        ])
-        self.bn_dw = nn.BatchNorm2d(hidden_channels)
-        self.act_dw = nn.SiLU()
-
-        # Final fusion
-        self.cv2 = nn.Conv2d(hidden_channels * (len(self.dw_convs) + 1), out_channels, 1, 1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.act2 = nn.SiLU()
-
-    def forward(self, x):
-        x = self.act1(self.bn1(self.cv1(x)))
-        dw_outs = [self.act_dw(self.bn_dw(dw_conv(x))) for dw_conv in self.dw_convs]
-        out = torch.cat([x] + dw_outs, dim=1)
-        out = self.act2(self.bn2(self.cv2(out)))
-        return out

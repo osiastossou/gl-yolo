@@ -85,6 +85,7 @@ if __name__ == '__main__':
     
     #python train.py -model 'ultralytics/cfg/models/12/yolo12.yaml' -data '/Users/osias/Documents/PHD/ultralytics-osias/ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'outname' -epochs 100
 
+#python train.py -model 'ultralytics/cfg/models/12/yolo12-glcab-full.yaml' -data 'ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'yolo12-glcab-full-10' -epochs 10
 
 
 

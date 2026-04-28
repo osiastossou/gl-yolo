@@ -107,6 +107,7 @@ from .transformer import (
     TransformerEncoderLayer,
     TransformerLayer,
 )
+from .gl_cab import GL_CAB, C2f_GLCAB
 
 __all__ = (
     "AIFI",
@@ -191,4 +192,6 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
+    "GL_CAB",
+    "C2f_GLCAB",
 )
