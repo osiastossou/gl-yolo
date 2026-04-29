@@ -37,17 +37,73 @@ def main(modelpath, data, outname,epochs,imgsz=640):
     # !! Remplacez 'path/to/your/dataset.yaml' par le chemin de votre fichier de configuration de données !!
     # Ce fichier décrit les chemins vers vos images d'entraînement/validation et les noms des classes.
     print("Début de l'entraînement avec l'architecture yolov11n-cbam.yaml...")
-    results = model.train(
+    #results = model.train(
         # cfg='yolov11n-cbam.yaml',  # Spécifie notre architecture customisée ici
         #data='/Users/osias/Documents/PHD/CODE/data/data.yaml',         # EXEMPLE: à remplacer par votre fichier de données
-        data=data,   
+        #data=data,
+        #epochs=epochs,
+        #imgsz=imgsz,
+        #batch=-1,
+        #device=0 if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',
+        #amp=True,                # 0 pour le premier GPU, ou 'cpu'
+        #name=outname, # Nom de l'expérience
+    #)
+
+    results = model.train(
+        data=data,
         epochs=epochs,
+
+        # ── Résolution & batch ────────────────────────────────────────────────
         imgsz=imgsz,
-        batch=-1,
-        device=0 if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',  
-        amp=True,                # 0 pour le premier GPU, ou 'cpu'
-        name=outname # Nom de l'expérience
+        batch=16,  # Fixe — pas auto-batch pour garantir l'équité entre modèles
+
+        # ── Device ────────────────────────────────────────────────────────────
+        device=0 if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',
+        amp=True,
+
+        # ── Optimiseur ────────────────────────────────────────────────────────
+        optimizer='SGD',
+        lr0=0.01,
+        lrf=0.01,  # LR final = lr0 × lrf = 0.0001
+        momentum=0.937,
+        weight_decay=0.0005,
+
+        # ── Warm-up ───────────────────────────────────────────────────────────
+        warmup_epochs=5.0,  # Plus long pour SPD/GLCAB (branches à initialiser)
+        warmup_momentum=0.8,
+        warmup_bias_lr=0.1,
+
+        # ── Scheduler ─────────────────────────────────────────────────────────
+        cos_lr=True,
+
+        # ── Augmentation ──────────────────────────────────────────────────────
+        mosaic=1.0,
+        close_mosaic=30,  # Désactive mosaic aux 30 dernières epochs sur 600
+        copy_paste=0.3,
+        translate=0.1,
+        scale=0.5,
+        fliplr=0.5,
+        flipud=0.0,
+        degrees=0.0,
+        hsv_h=0.015,
+        hsv_s=0.7,
+        hsv_v=0.4,
+
+        # ── Loss weights ──────────────────────────────────────────────────────
+        box=7.5,
+        cls=0.5,
+        dfl=1.5,
+
+        # ── Sauvegarde & monitoring ───────────────────────────────────────────
+        #patience=100,  # Sur 600 epochs, laisser 100 epochs sans amélioration
+        save=True,
+        save_period=50,  # Checkpoint toutes les 50 epochs
+        plots=True,
+        exist_ok=True,
+
+        name=outname,
     )
+
     print("Entraînement terminé.")
 
     # --- 3. VALIDATION (Optionnel mais recommandé) ---
