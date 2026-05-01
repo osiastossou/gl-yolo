@@ -27,7 +27,7 @@ def main(modelpath, data, outname,epochs,imgsz=640):
     model = YOLO(modelpath) 
     print("Modèle de base chargé.")
 
-    model = model.load("yolo12n.pt")
+    model = model.load("yolo11n.pt")
 
     # --- 2. ENTRAÎNEMENT AVEC CONFIGURATION CUSTOMISÉE ---
     # On lance l'entraînement en passant notre architecture customisée
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     
     #python train.py -model 'ultralytics/cfg/models/12/yolo12.yaml' -data '/Users/osias/Documents/PHD/ultralytics-osias/ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'outname' -epochs 100
 
-#python train.py -model 'ultralytics/cfg/models/12/yolo12-glcab-full.yaml' -data 'ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'yolo12-glcab-full-10' -epochs 10
+#python train.py -model 'ultralytics/cfg/models/12/yolo12-adapt-a2c2f.yaml' -data 'ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'yolo12-glcab-full-10' -epochs 10
 
 
 
