@@ -227,3 +227,4 @@ class C2f_GLCAB(nn.Module):
         for m in self.m:
             y.append(y[-1] + m(y[-1]))
         return self.cv2(torch.cat(y, dim=1))
+from ultralytics.nn.modules.block import PSABlock

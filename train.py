@@ -11,7 +11,7 @@ from ultralytics import YOLO
 
 
 
-def main(modelpath, data, outname,epochs,imgsz=640):
+def main(modelpath, data, outname,epochs,imgsz=640,v=11,p=True):
     """
     Fonction principale pour entraîner le modèle YOLOv11 customisé.
     """
@@ -24,10 +24,14 @@ def main(modelpath, data, outname,epochs,imgsz=640):
     # parser le nom 'yolov11n.pt' et définir l'échelle ('n') du modèle.
     # C'est cette étape qui résout l'erreur 'UnboundLocalError'.
     print(f"Chargement du modèle de base (modelpath)")
-    model = YOLO(modelpath) 
+    model = YOLO(modelpath)
     print("Modèle de base chargé.")
 
-    model = model.load("yolo11n.pt")
+    if p == True:
+        if v == 11:
+            model = model.load("yolo11n.pt")
+        elif v == 12:
+            model = model.load("yolo12n.pt")
 
     # --- 2. ENTRAÎNEMENT AVEC CONFIGURATION CUSTOMISÉE ---
     # On lance l'entraînement en passant notre architecture customisée
@@ -124,11 +128,13 @@ if __name__ == '__main__':
     parser.add_argument('-outname', type=str, required=True, help="Experiment output name")
     parser.add_argument('-epochs', type=int, required=True, help="Experiment output epochs")
     parser.add_argument('-imgsz', type=int, default=640, help="Image size for training (default: 640)")
+    parser.add_argument('-v', type=int, default=11, help="Version yolo (default: 11)")
+    parser.add_argument('-p', type=bool, default=True, help="Load pretrained model (default: True)")
 
     args = parser.parse_args()
 
     # Appel de main avec les arguments
-    main(args.model, args.data, args.outname, args.epochs, args.imgsz)
+    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v,args.p)
 
 
     #python main.py -model 'Yolo11CBAM/yolov11n-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100

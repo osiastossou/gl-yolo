@@ -107,7 +107,8 @@ from .transformer import (
     TransformerEncoderLayer,
     TransformerLayer,
 )
-from .gl_cab import GL_CAB, C2f_GLCAB,SPDConv
+from .gl_cab import GL_CAB, C2f_GLCAB,SPDConv#,GL_CAB_PSA
+from .uva import DWR,S2DResConv, SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast
 from .adapt_a2c2f import AdaptA2C2f
 
 __all__ = (
@@ -196,5 +197,8 @@ __all__ = (
     "GL_CAB",
     "C2f_GLCAB",
     "SPDConv",
-    "AdaptA2C2f"
+    "AdaptA2C2f",
+    "DWR",
+    "S2DResConv",
+    "SimAM", "BottleneckSimAM", "C3kSimAM", "FlexSimAM", "CARAFEFast"
 )
