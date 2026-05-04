@@ -80,7 +80,7 @@ from ultralytics.nn.modules import (
     GL_CAB,
     C2f_GLCAB,
     SPDConv, AdaptA2C2f,
-    SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv
+    SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1621,7 +1621,7 @@ def parse_model(d, ch, verbose=True):
             GL_CAB,
             C2f_GLCAB,
             SPDConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv
+            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1645,7 +1645,7 @@ def parse_model(d, ch, verbose=True):
             GL_CAB,
             C2f_GLCAB,
             SPDConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv
+            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args

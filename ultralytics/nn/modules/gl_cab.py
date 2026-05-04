@@ -228,3 +228,58 @@ class C2f_GLCAB(nn.Module):
             y.append(y[-1] + m(y[-1]))
         return self.cv2(torch.cat(y, dim=1))
 from ultralytics.nn.modules.block import PSABlock
+
+
+
+class GL_CAB_PSA(nn.Module):
+    """
+    Global-Local Combined Attention Block — parse_model compatible.
+
+    Signature : GL_CAB(c1, c2, *args, **kwargs)
+    *args et **kwargs absorbent les arguments supplémentaires
+    que parse_model peut envoyer selon la version d'Ultralytics.
+
+    YAML : [-1, 1, GL_CAB, [1024]]
+    parse_model envoie : GL_CAB(c1=ch[f], c2=1024)
+    """
+
+    def __init__(self, c1: int, c2: int,n: int = 1, *args, **kwargs):
+        super().__init__()
+        self.proj = Conv(c1, c2, 1) if c1 != c2 else nn.Identity()
+        c = c2
+
+        self.ldfe = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(c, c, 1, bias=False),
+            nn.Hardswish(inplace=True),
+            nn.Conv2d(c, c, 1, bias=False),
+            nn.GroupNorm(1, c),
+        )
+        self.lfe = nn.Sequential(
+            nn.Conv2d(c, c, 1, bias=False),
+            nn.Hardswish(inplace=True),
+            nn.Conv2d(c, c, 1, bias=False),
+            nn.BatchNorm2d(c),
+        )
+        self.gfe = nn.Sequential(
+            nn.Conv2d(c, c, 1, bias=False),
+            nn.BatchNorm2d(c),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(c, c, 1, bias=False),
+            nn.BatchNorm2d(c),
+        )
+        self.integrate = nn.Sequential(
+            nn.Conv2d(2 * c, c, 1, bias=False),
+            nn.Sigmoid(),
+        )
+        self.m = nn.Sequential(*(PSABlock(c, attn_ratio=0.5, num_heads=c // 64) for _ in range(n)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.proj(x)
+        B, C, H, W = x.shape
+        lp = self.ldfe(x).expand(B, C, H, W)
+        zp = self.lfe(x)
+        gp = self.gfe(x)
+        gp = self.m(gp)
+        gate = self.integrate(torch.cat([lp, zp], dim=1))
+        return gate * gp
