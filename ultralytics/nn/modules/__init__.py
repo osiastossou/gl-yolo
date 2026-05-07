@@ -112,6 +112,7 @@ from .uva import DWR,S2DResConv, SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CAR
 from .adapt_a2c2f import AdaptA2C2f
 from .sac_conv import SACConv
 from .pwc_conv import PWCConv
+from .pooling import LearnableLPPool2d
 
 __all__ = (
     "AIFI",
@@ -202,5 +203,6 @@ __all__ = (
     "AdaptA2C2f",
     "DWR",
     "S2DResConv",
+    "LearnableLPPool2d",
     "SimAM", "BottleneckSimAM", "C3kSimAM", "FlexSimAM", "CARAFEFast","SACConv","GL_CAB_PSA","PWCConv"
 )
