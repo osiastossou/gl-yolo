@@ -83,7 +83,7 @@ class PWCConv(nn.Module):
                 self.n_bins + 1,
                 device=x.device
             )
-
+            print(xb)
             hist = torch.histc(
                 xb,
                 bins=self.n_bins,
