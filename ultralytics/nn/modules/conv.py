@@ -612,6 +612,7 @@ class CBAM(nn.Module):
         """
         return self.spatial_attention(self.channel_attention(x))
 
+import torch.nn.functional as F
 
 class Concat(nn.Module):
     """Concatenate a list of tensors along specified dimension.
@@ -638,7 +639,36 @@ class Concat(nn.Module):
         Returns:
             (torch.Tensor): Concatenated tensor.
         """
-        return torch.cat(x, self.d)
+
+        # If size of all in x differente, please take de max size et padding the other
+
+        # Taille max
+        max_h = max(t.shape[2] for t in x)
+        max_w = max(t.shape[3] for t in x)
+
+        padded = []
+
+        for t in x:
+            _, _, h, w = t.shape
+
+            pad_h = max_h - h
+            pad_w = max_w - w
+
+            # padding: (left, right, top, bottom)
+            t = F.pad(
+                t,
+                (
+                    0, pad_w,
+                    0, pad_h
+                )
+            )
+
+            padded.append(t)
+
+        # Print size of each tensor in x
+        #print(t.shape for t in padded)
+
+        return torch.cat(padded, self.d)
 
 
 class Index(nn.Module):

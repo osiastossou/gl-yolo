@@ -111,6 +111,7 @@ from .gl_cab import GL_CAB, C2f_GLCAB,SPDConv, GL_CAB_PSA#,GL_CAB_PSA
 from .uva import DWR,S2DResConv, SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast
 from .adapt_a2c2f import AdaptA2C2f
 from .sac_conv import SACConv
+from .pwc_conv import PWCConv
 
 __all__ = (
     "AIFI",
@@ -201,5 +202,5 @@ __all__ = (
     "AdaptA2C2f",
     "DWR",
     "S2DResConv",
-    "SimAM", "BottleneckSimAM", "C3kSimAM", "FlexSimAM", "CARAFEFast","SACConv","GL_CAB_PSA"
+    "SimAM", "BottleneckSimAM", "C3kSimAM", "FlexSimAM", "CARAFEFast","SACConv","GL_CAB_PSA","PWCConv"
 )
