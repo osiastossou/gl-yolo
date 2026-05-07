@@ -1,88 +1,58 @@
-"""
-pwc_conv.py
-===========
-Probability-Weighted Convolution (PWC) — module compatible Ultralytics YOLO11.
-
-PWCConv hérite de Conv (Ultralytics) et override uniquement le forward.
-
-Stratégie de pondération :
-    Pour chaque pixel (b, c, h, w), son poids est l'inverse de la probabilité
-    de sa valeur dans l'histogramme GLOBAL de l'image d'entrée x.
-    Simple, rapide, et capture bien les pixels rares (petits objets).
-
-Auteur : Nelson Akaffou (2026)
-"""
-
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from ultralytics.nn.modules.conv import Conv
 
+class PWCConv(nn.Module):
+    def __init__(self, c1, c2, k=3, s=1, p=1, bins=17):
+        super().__init__()
+        self.k = k
+        self.s = s
+        self.p = p
+        self.bins = bins
+        self.eps = 1e-6
+        # Le filtre W est un filtre convolutif standard appris
+        self.weight = nn.Parameter(torch.randn(c2, c1, k, k))
 
-class PWCConv(Conv):
-    """
-    Probability-Weighted Convolution — hérite de Conv (Ultralytics).
+    def forward(self, x):
+        # 1. Extraction des patches (unfold) [cite: 525]
+        b, c, h, w = x.shape
+        patches = F.unfold(x, kernel_size=self.k, padding=self.p, stride=self.s)
+        # patches shape: (b, c*k*k, L) où L est le nombre de positions
+        
+        N = c * self.k * self.k
+        L = patches.shape[-1]
+        
+        # 2. Calcul des poids (en mode no_grad / stop-gradient) [cite: 506]
+        with torch.no_grad():
+            p_min = patches.min(dim=1, keepdim=True)[0]
+            p_max = patches.max(dim=1, keepdim=True)[0]
+            
+            # Calcul des indices de bins [cite: 378]
+            bin_idx = ((patches - p_min) * self.bins / (p_max - p_min + self.eps)).long()
+            bin_idx = torch.clamp(bin_idx, 0, self.bins - 1)
+            
+            # Probabilités empiriques (via scatter_add) [cite: 385, 528]
+            # On compte l'occurrence de chaque bin par patch
+            count = torch.zeros((b, self.bins, L), device=x.device)
+            ones = torch.ones_like(patches)
+            count.scatter_add_(1, bin_idx, ones)
+            p_hat = count / N  # Probabilité empirique [cite: 385]
+            
+            # Récupération de la probabilité correspondant à chaque pixel
+            p_pixel = torch.gather(p_hat, 1, bin_idx)
+            
+            # Calcul des poids normalisés [cite: 391, 396]
+            w_raw = 1.0 / (p_pixel + self.eps)
+            w_tilde = w_raw / (w_raw.mean(dim=1, keepdim=True) + self.eps)
 
-    Pour chaque pixel, son poids = 1 / (p_bin + eps) où p_bin est la
-    probabilité du bin de sa valeur dans l'histogramme global de l'image.
-    Pixels rares (petits objets) → poids élevé.
-    Pixels fréquents (fond) → poids faible.
-
-    Zéro paramètre supplémentaire par rapport à Conv.
-    Interface identique : PWCConv(c1, c2, k, s, p, g, d, act)
-    """
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True,
-                 n_bins=17, eps=1e-6):
-        super().__init__(c1, c2, k, s, p, g, d, act)
-        self.n_bins = n_bins
-        self.eps    = eps
-
-    @torch.no_grad()
-    def _pwc_weights(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Calcule les poids inverse-probabilité pour chaque pixel.
-
-        x       : (B, C, H, W)
-        retourne : (B, C, H, W) — poids normalisés (moyenne = 1)
-
-        Histogramme calculé par image (sur tous les C×H×W pixels),
-        puis appliqué pixel par pixel.
-        """
-        B, C, H, W = x.shape
-        N = C * H * W
-
-        # Aplatit x en (B, N) pour calculer l'histogramme par image
-        p = x.float().reshape(B, N)
-
-        # Min/max par image
-        p_min = p.min(dim=1, keepdim=True).values   # (B, 1)
-        p_max = p.max(dim=1, keepdim=True).values   # (B, 1)
-
-        # Bin index : (B, N)
-        scale   = self.n_bins / (p_max - p_min + self.eps)
-        bin_idx = ((p - p_min) * scale).long().clamp(0, self.n_bins - 1)
-
-        # Histogramme : (B, n_bins)
-        counts = torch.zeros(B, self.n_bins, device=x.device)
-        ones   = torch.ones(B, N, device=x.device)
-        counts.scatter_add_(1, bin_idx, ones)
-
-        # Poids inverse : (B, n_bins)
-        inv_p = N / (counts + self.eps)
-
-        # Récupère le poids de chaque pixel : (B, N)
-        w = inv_p.gather(1, bin_idx)
-
-        # Normalise par la moyenne (pixels rares > 1, fond ≈ 1)
-        w = w / (w.mean(dim=1, keepdim=True) + self.eps)
-
-        return w.reshape(B, C, H, W)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        weights  = self._pwc_weights(x).to(x.dtype)
-        x_w      = x * weights
-        return self.act(self.bn(self.conv(x_w)))
-
-    def forward_fuse(self, x: torch.Tensor) -> torch.Tensor:
-        weights = self._pwc_weights(x).to(x.dtype)
-        return self.act(self.conv(x * weights))
+        # 3. Application de la pondération et convolution [cite: 405]
+        weighted_patches = w_tilde * patches
+        
+        # Convolution via matmul (plus rapide pour les patches dépliés) [cite: 530]
+        w_flat = self.weight.view(self.weight.shape[0], -1)
+        y = torch.matmul(w_flat, weighted_patches) # (b, c2, L)
+        
+        # Repliage vers la forme image
+        h_out = (h + 2*self.p - self.k) // self.s + 1
+        w_out = (w + 2*self.p - self.k) // self.s + 1
+        return y.view(b, -1, h_out, w_out)
