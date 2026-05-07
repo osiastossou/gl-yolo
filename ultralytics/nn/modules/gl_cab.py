@@ -249,7 +249,7 @@ class GL_CAB_PSA(nn.Module):
         c = c2
 
         self.ldfe = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
+            #nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(c, c, 1, bias=False),
             nn.Hardswish(inplace=True),
             nn.Conv2d(c, c, 1, bias=False),
