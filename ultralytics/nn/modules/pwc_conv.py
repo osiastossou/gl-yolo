@@ -64,7 +64,7 @@ class PWCConv(nn.Module):
 
         for b in range(B):
 
-            xb = x_flat[b]
+            xb = x_flat[b].float()
 
             x_min = xb.min()
             x_max = xb.max()
