@@ -66,50 +66,36 @@ class PWCConv(nn.Module):
 
             xb = x_flat[b].float()
 
-            # Replace all the nan by 0 in all tensor of xb
-            xb = torch.nan_to_num(xb, nan=0.0)
+            xb = torch.nan_to_num(
+                xb,
+                nan=0.0,
+                posinf=0.0,
+                neginf=0.0
+            )
 
             x_min = xb.min()
             x_max = xb.max()
 
-            # IMPORTANT
             if torch.abs(x_max - x_min) < self.eps:
-                w = torch.ones_like(xb)
-
-                weights.append(w)
-
+                weights.append(torch.ones_like(xb))
                 continue
 
-            bins = torch.linspace(
-                x_min,
-                x_max,
-                self.n_bins + 1,
-                device=x.device
-            )
+            scale = (self.n_bins - 1) / (x_max - x_min + self.eps)
 
-            hist = torch.histc(
-                xb,
-                bins=self.n_bins,
-                min=x_min.item(),
-                max=x_max.item()
-            )
+            bins = ((xb - x_min) * scale).long()
 
-            hist = hist + self.eps
+            bins = bins.clamp(0, self.n_bins - 1)
 
-            idx = torch.bucketize(xb, bins[:-1])
+            counts = torch.bincount(
+                bins,
+                minlength=self.n_bins
+            ).float()
 
-            idx = idx.clamp(0, self.n_bins - 1)
+            counts = counts + self.eps
 
-            inv_freq = 1.0 / hist[idx]
+            inv_freq = 1.0 / counts[bins]
 
             inv_freq = inv_freq / inv_freq.mean()
-
-            inv_freq = torch.nan_to_num(
-                inv_freq,
-                nan=1.0,
-                posinf=1.0,
-                neginf=1.0
-            )
 
             weights.append(inv_freq)
 
