@@ -66,6 +66,9 @@ class PWCConv(nn.Module):
 
             xb = x_flat[b].float()
 
+            # Replace all the nan by 0 in all tensor of xb
+            xb = torch.nan_to_num(xb, nan=0.0)
+
             x_min = xb.min()
             x_max = xb.max()
 
