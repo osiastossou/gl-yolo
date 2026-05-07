@@ -14,107 +14,75 @@ Auteur : Nelson Akaffou (2026)
 """
 
 import torch
-from .conv import Conv
+import torch.nn.functional as F
+from ultralytics.nn.modules.conv import Conv
 
 
-import torch
-import torch.nn as nn
+class PWCConv(Conv):
+    """
+    Probability-Weighted Convolution — hérite de Conv (Ultralytics).
 
-from .conv import Conv
+    Pour chaque pixel, son poids = 1 / (p_bin + eps) où p_bin est la
+    probabilité du bin de sa valeur dans l'histogramme global de l'image.
+    Pixels rares (petits objets) → poids élevé.
+    Pixels fréquents (fond) → poids faible.
 
+    Zéro paramètre supplémentaire par rapport à Conv.
+    Interface identique : PWCConv(c1, c2, k, s, p, g, d, act)
+    """
 
-class PWCConv(nn.Module):
-
-    def __init__(
-        self,
-        c1,
-        c2,
-        k=1,
-        s=1,
-        p=None,
-        g=1,
-        d=1,
-        act=True,
-        n_bins=17,
-        eps=1e-6
-    ):
-
-        super().__init__()
-
-        self.conv_block = Conv(
-            c1=c1,
-            c2=c2,
-            k=k,
-            s=s,
-            p=p,
-            g=g,
-            d=d,
-            act=act
-        )
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True,
+                 n_bins=17, eps=1e-6):
+        super().__init__(c1, c2, k, s, p, g, d, act)
         self.n_bins = n_bins
-        self.eps = eps
+        self.eps    = eps
 
-    def _pwc_weights(self, x):
+    @torch.no_grad()
+    def _pwc_weights(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Calcule les poids inverse-probabilité pour chaque pixel.
 
+        x       : (B, C, H, W)
+        retourne : (B, C, H, W) — poids normalisés (moyenne = 1)
+
+        Histogramme calculé par image (sur tous les C×H×W pixels),
+        puis appliqué pixel par pixel.
+        """
         B, C, H, W = x.shape
+        N = C * H * W
 
-        x_flat = x.view(B, -1)
+        # Aplatit x en (B, N) pour calculer l'histogramme par image
+        p = x.float().reshape(B, N)
 
-        weights = []
+        # Min/max par image
+        p_min = p.min(dim=1, keepdim=True).values   # (B, 1)
+        p_max = p.max(dim=1, keepdim=True).values   # (B, 1)
 
-        for b in range(B):
+        # Bin index : (B, N)
+        scale   = self.n_bins / (p_max - p_min + self.eps)
+        bin_idx = ((p - p_min) * scale).long().clamp(0, self.n_bins - 1)
 
-            xb = x_flat[b].float()
+        # Histogramme : (B, n_bins)
+        counts = torch.zeros(B, self.n_bins, device=x.device)
+        ones   = torch.ones(B, N, device=x.device)
+        counts.scatter_add_(1, bin_idx, ones)
 
-            xb = torch.nan_to_num(
-                xb,
-                nan=0.0,
-                posinf=0.0,
-                neginf=0.0
-            )
+        # Poids inverse : (B, n_bins)
+        inv_p = N / (counts + self.eps)
 
-            x_min = xb.min()
-            x_max = xb.max()
+        # Récupère le poids de chaque pixel : (B, N)
+        w = inv_p.gather(1, bin_idx)
 
-            if torch.abs(x_max - x_min) < self.eps:
-                weights.append(torch.ones_like(xb))
-                continue
+        # Normalise par la moyenne (pixels rares > 1, fond ≈ 1)
+        w = w / (w.mean(dim=1, keepdim=True) + self.eps)
 
-            scale = (self.n_bins - 1) / (x_max - x_min + self.eps)
+        return w.reshape(B, C, H, W)
 
-            bins = ((xb - x_min) * scale).long()
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        weights  = self._pwc_weights(x).to(x.dtype)
+        x_w      = x * weights
+        return self.act(self.bn(self.conv(x_w)))
 
-            bins = bins.clamp(0, self.n_bins - 1)
-
-            counts = torch.bincount(
-                bins,
-                minlength=self.n_bins
-            ).float()
-
-            counts = counts + self.eps
-
-            inv_freq = 1.0 / counts[bins]
-
-            inv_freq = inv_freq / inv_freq.mean()
-
-            weights.append(inv_freq)
-
-        weights = torch.stack(weights)
-
-        return weights.view(B, C, H, W)
-
-    def forward(self, x):
-
-        w = self._pwc_weights(x).to(x.dtype)
-        x = x * w
-
-
-        return self.conv_block(x)
-
-    def forward_fuse(self, x):
-
-        w = self._pwc_weights(x).to(x.dtype)
-
-        x = x * w
-
-        return self.conv_block.forward_fuse(x)
+    def forward_fuse(self, x: torch.Tensor) -> torch.Tensor:
+        weights = self._pwc_weights(x).to(x.dtype)
+        return self.act(self.conv(x * weights))
