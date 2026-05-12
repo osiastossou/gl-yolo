@@ -161,9 +161,9 @@ class GL_CAB(nn.Module):
         super().__init__()
         self.proj = Conv(c1, c2, 1) if c1 != c2 else nn.Identity()
         c = c2
-        #1×1Conv → 3×3DWConv → BN → SiLU →3×3Conv → Residual
+
         self.ldfe = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
+            #nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(c, c, 1, bias=False),
             nn.Hardswish(inplace=True),
             nn.Conv2d(c, c, 1, bias=False),
@@ -190,9 +190,9 @@ class GL_CAB(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.proj(x)
         B, C, H, W = x.shape
-        gp = self.gfe(x)
-        lp = self.ldfe(gp).expand(B, C, H, W)
+        lp = self.ldfe(x).expand(B, C, H, W)
         zp = self.lfe(x)
+        gp = self.gfe(x)
         gate = self.integrate(torch.cat([lp, zp], dim=1))
         return gate * gp
 
@@ -249,7 +249,7 @@ class GL_CAB_PSA(nn.Module):
         c = c2
 
         self.ldfe = nn.Sequential(
-            #nn.AdaptiveAvgPool2d(1),
+            nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(c, c, 1, bias=False),
             nn.Hardswish(inplace=True),
             nn.Conv2d(c, c, 1, bias=False),
@@ -311,27 +311,24 @@ class GL_CAB_DW(nn.Module):
             nn.Conv2d(c, c, kernel_size=1, bias=False),
             # 3x3 Depthwise Conv
             nn.Conv2d(c,c,kernel_size=3,padding=1,groups=c,bias=False),
-
             # Batch Normalization
             nn.BatchNorm2d(c),
-
             # SiLU Activation
             nn.SiLU(inplace=True),
-
             # 3x3 Conv
-            nn.Conv2d(
-                c,
-                c,
-                kernel_size=3,
-                padding=1,
-                bias=False
-            ),
+            nn.Conv2d(c,c,kernel_size=1,padding=1,bias=False),
         )
         self.lfe = nn.Sequential(
-            nn.Conv2d(c, c, 1, bias=False),
-            nn.Hardswish(inplace=True),
-            nn.Conv2d(c, c, 1, bias=False),
+            # 1x1 Conv
+            nn.Conv2d(c, c, kernel_size=1, bias=False),
+            # 3x3 Depthwise Conv
+            nn.Conv2d(c,c,kernel_size=3,padding=1,groups=c,bias=False),
+            # Batch Normalization
             nn.BatchNorm2d(c),
+            # SiLU Activation
+            nn.SiLU(inplace=True),
+            # 3x3 Conv
+            nn.Conv2d(c,c,kernel_size=1,padding=1,bias=False),
         )
         self.gfe = nn.Sequential(
             nn.Conv2d(c, c, 1, bias=False),
