@@ -13,8 +13,6 @@ Integration
     from ultralytics import YOLO
     model = YOLO("tinyyolo.yaml")
 """
-
-
 import torch
 import torch.nn as nn
 
@@ -42,10 +40,9 @@ class _DWConv(nn.Module):
 
 class _ChannelAttention(nn.Module):
     """
-    Squeeze-and-Excitation style channel gate (CBAM variant).
-
-    Global avg-pool and max-pool statistics are each passed through the same
-    shared MLP; their outputs are summed before the sigmoid.
+    Squeeze-and-Excitation channel gate (CBAM variant).
+    Both global avg-pool and max-pool statistics share the same MLP;
+    their outputs are summed before the sigmoid gate.
     """
 
     def __init__(self, c: int, r: int = 16):
@@ -63,17 +60,15 @@ class _ChannelAttention(nn.Module):
         B, C, _, _ = x.shape
         avg  = self.mlp(self.avg_pool(x).view(B, C))
         mx   = self.mlp(self.max_pool(x).view(B, C))
-        gate = torch.sigmoid(avg + mx).view(B, C, 1, 1)
-        return x * gate
+        return x * torch.sigmoid(avg + mx).view(B, C, 1, 1)
 
 
 class _SpatialAttention(nn.Module):
     """
-    CBAM-style spatial gate with a large-kernel (7×7) depthwise conv.
-
-    For tiny objects the surrounding context (sky, road, background) is
-    often more discriminative than the few object pixels themselves — hence
-    the intentionally large receptive field.
+    CBAM-style spatial gate with a 7×7 conv.
+    Large kernel leverages background context — critical for tiny objects
+    where the surrounding scene (sky, road) is more discriminative than
+    the few object pixels themselves.
     """
 
     def __init__(self, k: int = 7):
@@ -84,8 +79,7 @@ class _SpatialAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         avg  = x.mean(dim=1, keepdim=True)
         mx   = x.amax(dim=1, keepdim=True)
-        gate = torch.sigmoid(self.bn(self.conv(torch.cat([avg, mx], dim=1))))
-        return x * gate
+        return x * torch.sigmoid(self.bn(self.conv(torch.cat([avg, mx], dim=1))))
 
 
 # ---------------------------------------------------------------------------
@@ -96,48 +90,42 @@ class TOSA(nn.Module):
     """
     Tiny Object Spatial Attention.
 
-    Applies channel attention then spatial attention, then blends back via a
-    learnable scalar α (initialised 0.5 → near-identity at start of training):
-
+    Channel attention → spatial attention → residual blend:
         output = x + α * (attended − x)
 
-    Ultralytics' parse_model passes the YAML args[0] channel value into
-    __init__, but that value may not match the actual width-scaled channel
-    count.  TOSA therefore uses *lazy initialisation*: the internal sub-
-    modules are built on the first forward pass from the real tensor shape,
-    then cached for all subsequent calls.
+    α is a learnable scalar initialised at 0.5 (near-identity at training
+    start, lets gradients flow through the skip path).
 
-    Args (YAML):
-        c_hint (int): Channel hint from YAML (used only as a sanity label;
-                      actual channels are read from the first input tensor).
-        r      (int): Channel-attention MLP reduction ratio (default 16).
-        k      (int): Spatial-attention conv kernel size (default 7).
+    WHY LAZY INIT
+    -------------
+    Ultralytics parse_model passes YAML args into __init__ *before* applying
+    width_multiple scaling.  The actual runtime channel count (x.shape[1])
+    may therefore differ from any arg in __init__.  Sub-modules that depend
+    on the channel count (_ChannelAttention, _SpatialAttention) are built on
+    the first forward() call from the real tensor shape and cached.
+
+    __init__ accepts *args / **kwargs so it works regardless of how many
+    positional arguments the local Ultralytics version of parse_model passes.
     """
 
-    def __init__(self, c_hint: int = 0, r: int = 16, k: int = 7):
+    def __init__(self, *args, r: int = 16, k: int = 7, **kwargs):
         super().__init__()
-        self.r      = r
-        self.k      = k
+        self._r     = r
+        self._k     = k
         self.alpha  = nn.Parameter(torch.tensor(0.5))
-        # Lazily-initialised submodules (built on first forward call)
-        self._ch_att: nn.Module  = None
-        self._sp_att: nn.Module  = None
-        self._built_c: int = 0
+        self._built_c: int = -1
 
-    def _build(self, c: int) -> None:
-        """Initialise sub-modules for channel count *c*."""
-        self._ch_att  = _ChannelAttention(c, self.r).to(self.alpha.device)
-        self._sp_att  = _SpatialAttention(self.k).to(self.alpha.device)
+    # ------------------------------------------------------------------
+    def _build(self, c: int, device: torch.device) -> None:
+        self.ch_att   = _ChannelAttention(c, self._r).to(device)
+        self.sp_att   = _SpatialAttention(self._k).to(device)
         self._built_c = c
-        # Register as proper sub-modules so optimiser and state_dict see them
-        self.ch_att = self._ch_att
-        self.sp_att = self._sp_att
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         c = x.shape[1]
         if self._built_c != c:
-            self._build(c)
-        attended = self._sp_att(self._ch_att(x))
+            self._build(c, x.device)
+        attended = self.sp_att(self.ch_att(x))
         return x + self.alpha * (attended - x)
 
 
@@ -147,35 +135,32 @@ class TOSA(nn.Module):
 
 class AvgPoolDWConv(nn.Module):
     """
-    Soft 2× downsampler: AvgPool2d(2) → DWConv(3×3).
+    Soft 2× downsampler: AvgPool2d(2) → DWConv(3×3, stride=1).
 
-    Replaces nn.MaxPool2d(2, stride=2) in the backbone.
+    Replaces nn.MaxPool2d(2, stride=2) throughout the backbone.
 
-    MaxPool keeps only the peak activation in each 2×2 window, destroying
-    the spatial structure of small objects.  AvgPool preserves distributed
-    energy; the subsequent 3×3 DWConv re-synthesises local patterns from it.
+    MaxPool keeps only the peak activation in each 2×2 window, effectively
+    erasing the spatial structure of objects that are only a few pixels wide.
+    AvgPool preserves distributed signal energy; the subsequent 3×3 DWConv
+    re-synthesises local patterns from it at negligible extra cost.
 
-    Like TOSA, this module uses lazy initialisation so it works regardless
-    of the width-scaled channel count at runtime.
+    Like TOSA, uses lazy init so it is robust to any number of args from
+    parse_model and to Ultralytics' width_multiple channel scaling.
     """
 
-    def __init__(self, c_hint: int = 0):
+    def __init__(self, *args, **kwargs):
         super().__init__()
-        self.pool     = nn.AvgPool2d(2, stride=2)
-        self._dw: nn.Module = None
-        self._built_c: int = 0
+        self.pool     = nn.AvgPool2d(kernel_size=2, stride=2)
+        self._built_c: int = -1
 
-    def _build(self, c: int) -> None:
-        self._dw      = _DWConv(c, k=3, s=1).to(self.pool.kernel_size.__class__)
+    # ------------------------------------------------------------------
+    def _build(self, c: int, device: torch.device) -> None:
+        self.dw       = _DWConv(c, k=3, s=1).to(device)
         self._built_c = c
-        # Use a proper parameter-free AvgPool2d for device transfer
-        dev = next(iter([]))  # just for type hint; lazily resolved in forward
-        self.dw = _DWConv(c, k=3, s=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.pool(x)
         c = x.shape[1]
         if self._built_c != c:
-            self.dw       = _DWConv(c, k=3, s=1).to(x.device)
-            self._built_c = c
-        return self.dw(self.pool(x))
-
+            self._build(c, x.device)
+        return self.dw(x)
