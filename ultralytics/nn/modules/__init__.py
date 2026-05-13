@@ -113,6 +113,7 @@ from .adapt_a2c2f import AdaptA2C2f
 from .sac_conv import SACConv
 from .pwc_conv import PWCConv
 from .pooling import LearnableLPPool2d
+from .tosa import TOSA, AvgPoolDWConv
 
 __all__ = (
     "AIFI",

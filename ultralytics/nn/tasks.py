@@ -79,7 +79,7 @@ from ultralytics.nn.modules import (
     CA2C2f,
     GL_CAB,
     C2f_GLCAB,
-    SPDConv, AdaptA2C2f,GL_CAB_DW,
+    SPDConv, AdaptA2C2f,GL_CAB_DW,TOSA, AvgPoolDWConv,
     SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
@@ -1620,7 +1620,7 @@ def parse_model(d, ch, verbose=True):
             CA2C2f,
             GL_CAB,
             C2f_GLCAB,
-            SPDConv,GL_CAB_DW,
+            SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
             AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
         }
     )
@@ -1644,7 +1644,7 @@ def parse_model(d, ch, verbose=True):
             CA2C2f,
             GL_CAB,
             C2f_GLCAB,
-            SPDConv,GL_CAB_DW,
+            SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
             AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
         }
     )
