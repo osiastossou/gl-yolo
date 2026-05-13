@@ -43,19 +43,13 @@ class _ChannelAttention(nn.Module):
     Squeeze-and-Excitation channel gate (CBAM variant).
     Both global avg-pool and max-pool statistics share the same MLP;
     their outputs are summed before the sigmoid gate.
-
-    AdaptiveMaxPool2d is intentionally avoided: it has no deterministic
-    CUDA backward implementation and triggers a UserWarning when
-    torch.use_deterministic_algorithms(True) is set (common on Kaggle).
-    Instead we use amax() over spatial dims, which is fully deterministic
-    and produces the identical mathematical result.
     """
 
     def __init__(self, c: int, r: int = 16):
         super().__init__()
         hidden = _make_divisible(max(c // r, 8))
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)   # deterministic ✓
-        # max_pool replaced by amax() in forward      deterministic ✓
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
         self.mlp = nn.Sequential(
             nn.Linear(c, hidden, bias=False),
             nn.ReLU(inplace=True),
@@ -64,10 +58,8 @@ class _ChannelAttention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, _, _ = x.shape
-        avg = self.mlp(self.avg_pool(x).view(B, C))
-        # amax over H,W — deterministic on all backends, same result as
-        # AdaptiveMaxPool2d(1) followed by .view(B, C)
-        mx  = self.mlp(x.amax(dim=(2, 3)))
+        avg  = self.mlp(self.avg_pool(x).view(B, C))
+        mx   = self.mlp(self.max_pool(x).view(B, C))
         return x * torch.sigmoid(avg + mx).view(B, C, 1, 1)
 
 
