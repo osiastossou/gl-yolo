@@ -290,63 +290,85 @@ class GL_CAB_PSA(nn.Module):
 
 
 class GL_CAB_DW(nn.Module):
-    """
-    Global-Local Combined Attention Block — parse_model compatible.
-
-    Signature : GL_CAB(c1, c2, *args, **kwargs)
-    *args et **kwargs absorbent les arguments supplémentaires
-    que parse_model peut envoyer selon la version d'Ultralytics.
-
-    YAML : [-1, 1, GL_CAB, [1024]]
-    parse_model envoie : GL_CAB(c1=ch[f], c2=1024)
-    """
 
     def __init__(self, c1: int, c2: int, *args, **kwargs):
         super().__init__()
+
         self.proj = Conv(c1, c2, 1) if c1 != c2 else nn.Identity()
         c = c2
-        #1×1Conv → 3×3DWConv → BN → SiLU →3×3Conv → Residual
+
         self.ldfe = nn.Sequential(
-            # 1x1 Conv
             nn.Conv2d(c, c, kernel_size=1, bias=False),
-            # 3x3 Depthwise Conv
-            nn.Conv2d(c,c,kernel_size=3,padding=1,groups=c,bias=False),
-            # Batch Normalization
+
+            nn.Conv2d(
+                c, c,
+                kernel_size=3,
+                padding=1,
+                groups=c,
+                bias=False
+            ),
+
             nn.BatchNorm2d(c),
-            # SiLU Activation
             nn.SiLU(inplace=True),
-            # 3x3 Conv
-            nn.Conv2d(c,c,kernel_size=1,padding=1,bias=False),
+
+            nn.Conv2d(
+                c, c,
+                kernel_size=1,
+                padding=0,
+                bias=False
+            ),
         )
+
         self.lfe = nn.Sequential(
-            # 1x1 Conv
             nn.Conv2d(c, c, kernel_size=1, bias=False),
-            # 3x3 Depthwise Conv
-            nn.Conv2d(c,c,kernel_size=3,padding=1,groups=c,bias=False),
-            # Batch Normalization
+
+            nn.Conv2d(
+                c, c,
+                kernel_size=3,
+                padding=1,
+                groups=c,
+                bias=False
+            ),
+
             nn.BatchNorm2d(c),
-            # SiLU Activation
             nn.SiLU(inplace=True),
-            # 3x3 Conv
-            nn.Conv2d(c,c,kernel_size=1,padding=1,bias=False),
+
+            nn.Conv2d(
+                c, c,
+                kernel_size=1,
+                padding=0,
+                bias=False
+            ),
         )
+
         self.gfe = nn.Sequential(
             nn.Conv2d(c, c, 1, bias=False),
             nn.BatchNorm2d(c),
             nn.ReLU(inplace=True),
+
             nn.Conv2d(c, c, 1, bias=False),
             nn.BatchNorm2d(c),
         )
+
         self.integrate = nn.Sequential(
             nn.Conv2d(2 * c, c, 1, bias=False),
             nn.Sigmoid(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+
         x = self.proj(x)
+
         B, C, H, W = x.shape
+
         gp = self.gfe(x)
-        lp = self.ldfe(gp).expand(B, C, H, W)
+
+        lp = self.ldfe(gp)
+
         zp = self.lfe(x)
-        gate = self.integrate(torch.cat([lp, zp], dim=1))
+
+        gate = self.integrate(
+            torch.cat([lp, zp], dim=1)
+        )
+
         return gate * gp
