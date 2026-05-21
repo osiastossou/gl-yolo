@@ -1,7 +1,7 @@
 # train.py
 
 # /Users/osias/Documents/PHD/CODE/data/data.yaml
-import os,sys
+import os, sys
 import torch
 
 from ultralytics import YOLO
@@ -19,19 +19,18 @@ def get_device():
         except ImportError:
             return 'cpu'
 
+
 device = get_device()
 
 
-
-
-def main(modelpath, data, outname,epochs,imgsz=640,v=11,p=True):
+def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     """
     Fonction principale pour entraîner le modèle YOLOv11 customisé.
     """
     # S'assurer que le script s'exécute dans le bon répertoire
     # pour qu'il puisse trouver les autres fichiers.
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    
+
     # --- 1. CHARGEMENT DU MODÈLE DE BASE ---
     # On charge le modèle pré-entrainé standard. La librairie va correctement
     # parser le nom 'yolov11n.pt' et définir l'échelle ('n') du modèle.
@@ -54,17 +53,17 @@ def main(modelpath, data, outname,epochs,imgsz=640,v=11,p=True):
     # !! Remplacez 'path/to/your/dataset.yaml' par le chemin de votre fichier de configuration de données !!
     # Ce fichier décrit les chemins vers vos images d'entraînement/validation et les noms des classes.
     print("Début de l'entraînement avec l'architecture yolov11n-cbam.yaml...")
-    #results = model.train(
-        # cfg='yolov11n-cbam.yaml',  # Spécifie notre architecture customisée ici
-        #data='/Users/osias/Documents/PHD/CODE/data/data.yaml',         # EXEMPLE: à remplacer par votre fichier de données
-        #data=data,
-        #epochs=epochs,
-        #imgsz=imgsz,
-        #batch=-1,
-        #device=0 if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',
-        #amp=True,                # 0 pour le premier GPU, ou 'cpu'
-        #name=outname, # Nom de l'expérience
-    #)
+    # results = model.train(
+    # cfg='yolov11n-cbam.yaml',  # Spécifie notre architecture customisée ici
+    # data='/Users/osias/Documents/PHD/CODE/data/data.yaml',         # EXEMPLE: à remplacer par votre fichier de données
+    # data=data,
+    # epochs=epochs,
+    # imgsz=imgsz,
+    # batch=-1,
+    # device=0 if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu',
+    # amp=True,                # 0 pour le premier GPU, ou 'cpu'
+    # name=outname, # Nom de l'expérience
+    # )
 
     results = model.train(
         data=data,
@@ -112,7 +111,7 @@ def main(modelpath, data, outname,epochs,imgsz=640,v=11,p=True):
         dfl=1.5,
 
         # ── Sauvegarde & monitoring ───────────────────────────────────────────
-        #patience=100,  # Sur 600 epochs, laisser 100 epochs sans amélioration
+        # patience=100,  # Sur 600 epochs, laisser 100 epochs sans amélioration
         save=True,
         save_period=50,  # Checkpoint toutes les 50 epochs
         plots=True,
@@ -131,6 +130,7 @@ def main(modelpath, data, outname,epochs,imgsz=640,v=11,p=True):
     print("Métriques de validation :")
     print(metrics)
 
+
 if __name__ == '__main__':
     import argparse
 
@@ -148,22 +148,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Appel de main avec les arguments
-    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v,args.p)
+    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p)
 
+    # python main.py -model 'Yolo11CBAM/yolov11n-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
 
-    #python main.py -model 'Yolo11CBAM/yolov11n-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
+    # python train.py -model 'Yolo11CBAM/yolov11n-transformer.yaml' -data '/Users/osias/Documents/PHD/CODE/mva2023_sod4bird_dataset/data.yaml' -outname 'outname' -epochs 100
 
-    #python train.py -model 'Yolo11CBAM/yolov11n-transformer.yaml' -data '/Users/osias/Documents/PHD/CODE/mva2023_sod4bird_dataset/data.yaml' -outname 'outname' -epochs 100
+    # python main.py -model 'Yolo11CBAM/yolov11n-gld-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
 
+    # python train.py -model 'ultralytics/cfg/models/12/yolo12.yaml' -data '/Users/osias/Documents/PHD/ultralytics-osias/ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'outname' -epochs 100
 
-    #python main.py -model 'Yolo11CBAM/yolov11n-gld-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
-
-    
-    #python train.py -model 'ultralytics/cfg/models/12/yolo12.yaml' -data '/Users/osias/Documents/PHD/ultralytics-osias/ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'outname' -epochs 100
-
-#python train.py -model 'ultralytics/cfg/models/12/yolo12-adapt-a2c2f.yaml' -data 'ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'yolo12-glcab-full-10' -epochs 10
-
-
-
-
-
+# python train.py -model 'ultralytics/cfg/models/12/yolo12-adapt-a2c2f.yaml' -data 'ultralytics/cfg/datasets/DOTAv1.5.yaml' -outname 'yolo12-glcab-full-10' -epochs 10
