@@ -17,19 +17,18 @@
 # │  • args    : arguments passés au constructeur __init__                  │
 # └─────────────────────────────────────────────────────────────────────────┘
 
-nc: 1      # nombre de classes (à adapter à votre dataset)
-ch: 16   # <- si tes images ont 16 canaux (sinon retire cette ligne)
+nc: 1 # nombre de classes (à adapter à votre dataset)
+ch: 16 # <- si tes images ont 16 canaux (sinon retire cette ligne)
 
 scales:
   # [depth, width, max_channels]
   # depth  : multiplie le nombre de répétitions (repeats)
   # width  : multiplie le nombre de canaux
-  n: [0.50, 0.25, 1024]   # nano
-  s: [0.50, 0.50, 1024]   # small
-  m: [0.50, 1.00,  512]   # medium
-  l: [1.00, 1.00,  512]   # large
-  x: [1.00, 1.50,  512]   # xlarge
-
+  n: [0.50, 0.25, 1024] # nano
+  s: [0.50, 0.50, 1024] # small
+  m: [0.50, 1.00, 512] # medium
+  l: [1.00, 1.00, 512] # large
+  x: [1.00, 1.50, 512] # xlarge
 
 # ══════════════════════════════════════════════════════════════════════════════
 # BACKBONE  —  extraction des features
@@ -41,46 +40,46 @@ scales:
 #  Résolution de sortie par layer (pour une entrée 640×640) :
 #    Layer 0  →  320×320   (stride 2)
 #    Layer 1  →  160×160   (stride 4)   P2
-#    Layer 4  →   80×80    (stride 8)   P3  ← petits objets
-#    Layer 6  →   40×40    (stride 16)  P4  ← objets moyens
-#    Layer 9  →   20×20    (stride 32)  P5  ← grands objets
+#    Layer 4  →   80×80    (stride 8)   P3  ← petits objects
+#    Layer 6  →   40×40    (stride 16)  P4  ← objects moyens
+#    Layer 9  →   20×20    (stride 32)  P5  ← grands objects
 #
 backbone:
   # [from, repeats, module, args]
 
   # ── Stem ──────────────────────────────────────────────────────────────────
-  - [-1, 1, Conv, [64, 3, 2]]          # 0 (k=3, s=2) ; c_in vient de `ch`
-  - [-1, 1, Conv, [128, 3, 2]]         # 1
+  - [-1, 1, Conv, [64, 3, 2]] # 0 (k=3, s=2) ; c_in vient de `ch`
+  - [-1, 1, Conv, [128, 3, 2]] # 1
 
   # ── Stage 1 ───────────────────────────────────────────────────────────────
-  - [-1, 2, C3k2, [256, False, 0.25]]   # 2         160×160   ch=256
+  - [-1, 2, C3k2, [256, False, 0.25]] # 2         160×160   ch=256
   #   C3k2 = Cross Stage Partial avec 2 convolutions
   #   args: [out_channels, shortcut, expansion]
 
-  - [-1, 1, Conv, [256, 3, 2]]          # 3  P3/8    80×80    ch=256
+  - [-1, 1, Conv, [256, 3, 2]] # 3  P3/8    80×80    ch=256
 
-  # ── Stage 2  — features P3 (petits objets) ────────────────────────────────
-  - [-1, 2, C3k2, [512, False, 0.25]]   # 4  P3      80×80    ch=512
+  # ── Stage 2  — features P3 (petits objects) ────────────────────────────────
+  - [-1, 2, C3k2, [512, False, 0.25]] # 4  P3      80×80    ch=512
   #   ▲ SAUVEGARDÉ — utilisé par MB-FPN (branche principale) et le head FPN
 
-  - [-1, 1, Conv, [512, 3, 2]]          # 5  P4/16   40×40    ch=512
+  - [-1, 1, Conv, [512, 3, 2]] # 5  P4/16   40×40    ch=512
 
-  # ── Stage 3  — features P4 (objets moyens) ────────────────────────────────
-  - [-1, 2, C3k2, [512, True]]          # 6  P4      40×40    ch=512
+  # ── Stage 3  — features P4 (objects moyens) ────────────────────────────────
+  - [-1, 2, C3k2, [512, True]] # 6  P4      40×40    ch=512
   #   ▲ SAUVEGARDÉ — utilisé par MB-FPN et le head FPN
 
-  - [-1, 1, Conv, [1024, 3, 2]]         # 7  P5/32   20×20    ch=1024
+  - [-1, 1, Conv, [1024, 3, 2]] # 7  P5/32   20×20    ch=1024
 
-  # ── Stage 4  — features P5 (grands objets / contexte global) ──────────────
-  - [-1, 2, C3k2, [1024, True]]         # 8          20×20    ch=1024
+  # ── Stage 4  — features P5 (grands objects / contexte global) ──────────────
+  - [-1, 2, C3k2, [1024, True]] # 8          20×20    ch=1024
 
   # ── SPPF  —  Spatial Pyramid Pooling Fast ─────────────────────────────────
-  - [-1, 1, SPPF, [1024, 5]]            # 9  P5      20×20    ch=1024
+  - [-1, 1, SPPF, [1024, 5]] # 9  P5      20×20    ch=1024
   #   ▲ SAUVEGARDÉ — features P5 profondes (branche principale MB-FPN)
   #   SPPF agrège le contexte multi-échelle avec des max-poolings en cascade
 
   # ── GL-CAB  —  Global-Local Combined Attention Block ──────────────────────
-  - [-1, 1, GLCAB, [256]]             # 10 (pas 256)
+  - [-1, 1, GLCAB, [256]] # 10 (pas 256)
   #   ▲ SAUVEGARDÉ — features P5 après attention (branche super-res MB-FPN)
   #
   #   GLCAB reçoit UN SEUL tenseur (from=-1 = layer 9)
@@ -92,15 +91,13 @@ backbone:
   #
   #   Pourquoi ici ? Le GLCAB est placé après SPPF pour enrichir les features
   #   profondes avec une attention combinée globale+locale AVANT la fusion FPN.
-  #   Cela résout le problème de "missed detection" des petits objets.
-
+  #   Cela résout le problème de "missed detection" des petits objects.
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HEAD  —  neck FPN + têtes de détection
 # ══════════════════════════════════════════════════════════════════════════════
 
 head:
-
   # ┌─────────────────────────────────────────────────────────────────────────┐
   # │  MB-FPN  —  Multi-Branch Feature Pyramid Network                       │
   # │                                                                         │
@@ -146,30 +143,30 @@ head:
 
   # ── Neck FPN standard — chemin montant (upsample) ─────────────────────────
   #
-  #  On utilise les sorties de MB-FPN pour construire le neck.
+  #  On utilize les sorties de MB-FPN pour construire le neck.
   #  MB-FPN retourne une liste → on indexe avec [-1] pour avoir le premier
   #  élément (P1* = features P3 80×80 enrichies).
 
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]   # 12  upsample P1* (80→160)
-  - [[-1, 6], 1, Concat, [1]]                    # 13  concat avec P4 backbone
-  - [-1, 2, C3k2, [512, False]]                  # 14  fusion P4
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 12  upsample P1* (80→160)
+  - [[-1, 6], 1, Concat, [1]] # 13  concat avec P4 backbone
+  - [-1, 2, C3k2, [512, False]] # 14  fusion P4
 
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]   # 15  upsample (40→80)
-  - [[-1, 4], 1, Concat, [1]]                    # 16  concat avec P3 backbone
-  - [-1, 2, C3k2, [256, False]]                  # 17  P3/8 — petits objets ★
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 15  upsample (40→80)
+  - [[-1, 4], 1, Concat, [1]] # 16  concat avec P3 backbone
+  - [-1, 2, C3k2, [256, False]] # 17  P3/8 — petits objects ★
 
   # ── Neck FPN — chemin descendant (downsample) ─────────────────────────────
 
-  - [-1, 1, Conv, [256, 3, 2]]                   # 18  stride 2 (80→40)
-  - [[-1, 14], 1, Concat, [1]]                   # 19  concat avec features P4
-  - [-1, 2, C3k2, [512, False]]                  # 20  P4/16 — objets moyens ★
+  - [-1, 1, Conv, [256, 3, 2]] # 18  stride 2 (80→40)
+  - [[-1, 14], 1, Concat, [1]] # 19  concat avec features P4
+  - [-1, 2, C3k2, [512, False]] # 20  P4/16 — objects moyens ★
 
-  - [-1, 1, Conv, [512, 3, 2]]                   # 21  stride 2 (40→20)
-  - [[-1, 11], 1, Concat, [1]]                   # 22  concat avec MB-FPN out
-  - [-1, 2, C3k2, [1024, True]]                  # 23  P5/32 — grands objets ★
+  - [-1, 1, Conv, [512, 3, 2]] # 21  stride 2 (40→20)
+  - [[-1, 11], 1, Concat, [1]] # 22  concat avec MB-FPN out
+  - [-1, 2, C3k2, [1024, True]] # 23  P5/32 — grands objects ★
 
   # ── Têtes de détection ────────────────────────────────────────────────────
-  - [[17, 20, 23], 1, Detect, [nc]]              # 24  Detect(P3, P4, P5)
-  #   17 = P3/8  → détecte les petits objets    (stride  8, résolution 80×80)
-  #   20 = P4/16 → détecte les objets moyens    (stride 16, résolution 40×40)
-  #   23 = P5/32 → détecte les grands objets    (stride 32, résolution 20×20)
+  - [[17, 20, 23], 1, Detect, [nc]] # 24  Detect(P3, P4, P5)
+  #   17 = P3/8  → détecte les petits objects    (stride  8, résolution 80×80)
+  #   20 = P4/16 → détecte les objects moyens    (stride 16, résolution 40×40)
+  #   23 = P5/32 → détecte les grands objects    (stride 32, résolution 20×20)
