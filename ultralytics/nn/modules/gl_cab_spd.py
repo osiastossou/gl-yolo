@@ -1,10 +1,10 @@
 """
-gl_cab_spd.py
+gl_cab_spd.py.
 =============
-Combinaison SPDConv + GL-CAB pour YOLOv12 sur VisDrone.
+Combination SPDConv + GL-CAB pour YOLOv12 sur VisDrone.
 
 SPDConv  — préserve l'information spatiale au down-sampling
-GL-CAB   — enrichit la représentation locale+globale dans les blocs
+GL-CAB   — enrichit la représentation locale+globale dans les blocks
            (fidèle à : Bao Liu et al., IEEE DDCLS 2023)
 
 Les deux se complètent exactement selon le papier GL-CAB (section 2.2) :
@@ -15,6 +15,7 @@ Les deux se complètent exactement selon le papier GL-CAB (section 2.2) :
 
 import torch
 import torch.nn as nn
+
 from ultralytics.nn.modules.conv import Conv
 
 
@@ -22,11 +23,9 @@ from ultralytics.nn.modules.conv import Conv
 # SPDConv — Space-to-Depth Convolution
 # ─────────────────────────────────────────────────────────────────────────────
 class SPDConv(nn.Module):
-    """
-    Remplace Conv(stride=2) sans perte d'information.
+    """Replace Conv(stride=2) sans perte d'information.
 
-    Réarrange (B, C, H, W) → (B, C·s², H/s, W/s) puis applique
-    une Conv stride=1. Aucun pixel n'est abandonné.
+    Réarrange (B, C, H, W) → (B, C·s², H/s, W/s) puis applique une Conv stride=1. Aucun pixel n'est abandonné.
 
     Args:
         c1 (int): Canaux d'entrée.
@@ -38,7 +37,7 @@ class SPDConv(nn.Module):
     def __init__(self, c1: int, c2: int, k: int = 3, s: int = 2):
         super().__init__()
         self.s = s
-        self.conv = Conv(c1 * s * s, c2, k, 1)   # stride=1 après rearrangement
+        self.conv = Conv(c1 * s * s, c2, k, 1)  # stride=1 après rearrangement
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = x.shape
@@ -54,12 +53,8 @@ class SPDConv(nn.Module):
 # Bao Liu et al., IEEE DDCLS 2023, équations (2)–(5)
 # ─────────────────────────────────────────────────────────────────────────────
 class GL_CAB(nn.Module):
-    """
-    Équations du papier :
-        L(P) = BN(Conv(Hs(Conv(G(P)))))    # LDFE — local detail
-        Z(P) = BN(Conv(Hs(Conv(P))))        # LFE  — local feature
-        G(P) = BN(Conv(R(BN(Conv(P)))))    # GFE  — global feature
-        W(P) = σ(L(P) ⊕ Z(P)) ⊗ G(P)     # sortie
+    """Équations du papier : L(P) = BN(Conv(Hs(Conv(G(P))))) # LDFE — local detail Z(P) = BN(Conv(Hs(Conv(P)))) # LFE —
+    local feature G(P) = BN(Conv(R(BN(Conv(P))))) # GFE — global feature W(P) = σ(L(P) ⊕ Z(P)) ⊗ G(P) # sortie.
 
     Args:
         c (int): Canaux (entrée = sortie).
@@ -70,28 +65,28 @@ class GL_CAB(nn.Module):
 
         # LDFE : L(P) = BN(Conv(Hs(Conv(G(P)))))
         self.ldfe = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),            # G(·) global avg pool
-            nn.Conv2d(c, c, 1, bias=False),     # Conv
-            nn.Hardswish(inplace=True),         # Hs
-            nn.Conv2d(c, c, 1, bias=False),     # Conv
-            nn.BatchNorm2d(c),                  # BN
+            nn.AdaptiveAvgPool2d(1),  # G(·) global avg pool
+            nn.Conv2d(c, c, 1, bias=False),  # Conv
+            nn.Hardswish(inplace=True),  # Hs
+            nn.Conv2d(c, c, 1, bias=False),  # Conv
+            nn.BatchNorm2d(c),  # BN
         )
 
         # LFE : Z(P) = BN(Conv(Hs(Conv(P))))
         self.lfe = nn.Sequential(
-            nn.Conv2d(c, c, 1, bias=False),     # Conv
-            nn.Hardswish(inplace=True),         # Hs
-            nn.Conv2d(c, c, 1, bias=False),     # Conv
-            nn.BatchNorm2d(c),                  # BN
+            nn.Conv2d(c, c, 1, bias=False),  # Conv
+            nn.Hardswish(inplace=True),  # Hs
+            nn.Conv2d(c, c, 1, bias=False),  # Conv
+            nn.BatchNorm2d(c),  # BN
         )
 
         # GFE : G(P) = BN(Conv(R(BN(Conv(P)))))
         self.gfe = nn.Sequential(
-            nn.Conv2d(c, c, 1, bias=False),     # Conv
-            nn.BatchNorm2d(c),                  # BN
-            nn.ReLU(inplace=True),              # R
-            nn.Conv2d(c, c, 1, bias=False),     # Conv
-            nn.BatchNorm2d(c),                  # BN
+            nn.Conv2d(c, c, 1, bias=False),  # Conv
+            nn.BatchNorm2d(c),  # BN
+            nn.ReLU(inplace=True),  # R
+            nn.Conv2d(c, c, 1, bias=False),  # Conv
+            nn.BatchNorm2d(c),  # BN
         )
 
         # Intégration : Conv(L⊕Z) → sigmoid
@@ -103,14 +98,14 @@ class GL_CAB(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = x.shape
 
-        lp = self.ldfe(x).expand(B, C, H, W)   # L(P) broadcast → (B,C,H,W)
-        zp = self.lfe(x)                        # Z(P)
-        gp = self.gfe(x)                        # G(P)
+        lp = self.ldfe(x).expand(B, C, H, W)  # L(P) broadcast → (B,C,H,W)
+        zp = self.lfe(x)  # Z(P)
+        gp = self.gfe(x)  # G(P)
 
         gate = self.integrate(
-            torch.cat([lp, zp], dim=1)          # L(P) ⊕ Z(P)
+            torch.cat([lp, zp], dim=1)  # L(P) ⊕ Z(P)
         )
-        return gate * gp                        # W(P) = σ(L⊕Z) ⊗ G(P)
+        return gate * gp  # W(P) = σ(L⊕Z) ⊗ G(P)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,8 +113,7 @@ class GL_CAB(nn.Module):
 # Drop-in replacement pour C3k2 et A2C2f dans le YAML YOLOv12
 # ─────────────────────────────────────────────────────────────────────────────
 class C2f_GLCAB(nn.Module):
-    """
-    C2f avec GL_CAB — signature identique à C3k2 pour compatibilité YAML.
+    """C2f avec GL_CAB — signature identique à C3k2 pour compatibilité YAML.
 
     Structure :
         cv1(x) → [x_0, GL_CAB(x_0)+x_0, GL_CAB(x_1)+x_1, ...] → cv2
@@ -127,30 +121,34 @@ class C2f_GLCAB(nn.Module):
     YAML : [-1, 2, C2f_GLCAB, [256, False, 0.25]]
 
     Args:
-        c1       (int)  : canaux entrée.
-        c2       (int)  : canaux sortie.
-        n        (int)  : nombre de blocs GL_CAB.
-        c3k      (bool) : ignoré, compat. signature C3k2.
+        c1       (int): canaux entrée.
+        c2       (int): canaux sortie.
+        n        (int): nombre de blocks GL_CAB.
+        c3k      (bool): ignoré, compat. signature C3k2.
         e        (float): ratio expansion canaux cachés.
-        shortcut (bool) : ignoré, résidu géré en interne.
+        shortcut (bool): ignoré, résidu géré en interne.
     """
 
     def __init__(
         self,
-        c1: int, c2: int, n: int = 1,
-        c3k: bool = False, e: float = 0.5,
-        shortcut: bool = True, **kwargs,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        c3k: bool = False,
+        e: float = 0.5,
+        shortcut: bool = True,
+        **kwargs,
     ):
         super().__init__()
         c_ = max(int(c2 * e), 32)
         self.cv1 = Conv(c1, c_, 1, 1)
         self.cv2 = Conv((1 + n) * c_, c2, 1)
-        self.m   = nn.ModuleList([GL_CAB(c_) for _ in range(n)])
+        self.m = nn.ModuleList([GL_CAB(c_) for _ in range(n)])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = [self.cv1(x)]
         for m in self.m:
-            y.append(y[-1] + m(y[-1]))          # résidu explicite
+            y.append(y[-1] + m(y[-1]))  # résidu explicite
         return self.cv2(torch.cat(y, dim=1))
 
 
@@ -158,19 +156,18 @@ class C2f_GLCAB(nn.Module):
 # Enregistrement dans Ultralytics (à appeler avant YOLO())
 # ─────────────────────────────────────────────────────────────────────────────
 def register_modules():
-    """
-    Injecte SPDConv, GL_CAB et C2f_GLCAB dans le namespace Ultralytics
-    pour que parse_model() les reconnaisse dans le YAML.
+    """Injecte SPDConv, GL_CAB et C2f_GLCAB dans le namespace Ultralytics pour que parse_model() les reconnaisse dans le
+    YAML.
 
     Appeler UNE FOIS avant YOLO() ou DetectionModel().
     """
-    import ultralytics.nn.tasks  as _tasks
     import ultralytics.nn.modules as _mods
+    import ultralytics.nn.tasks as _tasks
 
     for name, cls in [
-        ("SPDConv",    SPDConv),
-        ("GL_CAB",     GL_CAB),
-        ("C2f_GLCAB",  C2f_GLCAB),
+        ("SPDConv", SPDConv),
+        ("GL_CAB", GL_CAB),
+        ("C2f_GLCAB", C2f_GLCAB),
     ]:
         _tasks.__dict__[name] = cls
         setattr(_mods, name, cls)

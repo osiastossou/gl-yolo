@@ -4,9 +4,8 @@ import torch.nn.functional as F
 
 
 class PWC_Layer(nn.Module):
-    """
-    Convolution Pondérée par Probabilités (PWC) - Version 1.0 (2026).
-    Amplifie les pixels rares pour la détection de petits objets. [cite: 4, 8]
+    """Convolution Pondérée par Probabilités (PWC) - Version 1.0 (2026). Amplifie les pixels rares pour la détection de
+    petits objects. [cite: 4, 8].
     """
 
     def __init__(self, c1, c2, k=3, s=1, p=1, bins=17):
@@ -21,10 +20,10 @@ class PWC_Layer(nn.Module):
         self.weight = nn.Parameter(torch.randn(c2, c1, k, k))
 
     def forward(self, x):
-        b, c, h, w = x.shape
+        b, _c, h, w = x.shape
 
         # 1. Extraction du patch local P_{i,j} [cite: 67]
-        # On utilise unfold pour obtenir tous les patches du voisinage local
+        # On utilize unfold pour obtenir tous les patches du voisinage local
         patches = F.unfold(x, kernel_size=self.k, padding=self.p, stride=self.s)
         # patches shape: (b, C*k*k, L) avec L = nombre de positions spatiales
 
@@ -39,12 +38,12 @@ class PWC_Layer(nn.Module):
             p_max = patches.max(dim=1, keepdim=True)[0]
 
             # Calcul des indices de bin b(p_n) [cite: 74, 75]
-            # On normalise la valeur du pixel dans l'intervalle [0, bins-1]
+            # On normalize la valeur du pixel dans l'intervalle [0, bins-1]
             bin_idx = ((patches - p_min) * self.bins / (p_max - p_min + self.eps)).long()
             bin_idx = torch.clamp(bin_idx, 0, self.bins - 1)
 
             # Calcul de la probabilité empirique p_hat [cite: 81, 82]
-            # Initialisation avec le bon dtype/device pour éviter l'erreur scatter_add
+            # Initialization avec le bon dtype/device pour éviter l'erreur scatter_add
             count = torch.zeros((b, self.bins, L), dtype=patches.dtype, device=patches.device)
             ones = torch.ones_like(patches)
 
@@ -58,16 +57,16 @@ class PWC_Layer(nn.Module):
             # Calcul du poids inverse-probabilité w(p_n) [cite: 88, 89]
             w_raw = 1.0 / (p_pixel + self.eps)
 
-            # Normalisation des poids (moyenne = 1 dans le patch) [cite: 92, 93]
+            # Normalization des poids (moyenne = 1 dans le patch) [cite: 92, 93]
             w_tilde = w_raw / (w_raw.mean(dim=1, keepdim=True) + self.eps)
 
         # 3. Opération PWC [cite: 101, 102]
         # Application de la pondération sur le patch original
-        # Les pixels rares (objet) sont amplifiés, le fond est atténué [cite: 13, 96]
+        # Les pixels rares (object) sont amplifiés, le fond est atténué [cite: 13, 96]
         weighted_patches = w_tilde * patches
 
         # Convolution finale : y = <W, P_tilde> [cite: 102]
-        # On utilise matmul pour simuler la convolution sur les patches dépliés
+        # On utilize matmul pour simuler la convolution sur les patches dépliés
         w_flat = self.weight.view(self.weight.shape[0], -1)
         y = torch.matmul(w_flat, weighted_patches)
 
@@ -78,9 +77,7 @@ class PWC_Layer(nn.Module):
 
 
 class PWCConv(nn.Module):
-    """
-    Bloc conteneur incluant BatchNorm et Activation SiLU
-    pour une intégration fluide dans le backbone YOLO.
+    """Bloc conteneur incluant BatchNorm et Activation SiLU pour une intégration fluide dans le backbone YOLO.
     """
 
     def __init__(self, c1, c2, k=3, s=1, p=None, act=True):

@@ -10,10 +10,9 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-#from Yolo11CBAM.custom_modules import CBAM,TransformerBlock, GL_CAB, GL_CAB_PSABlock,DilatedDepthwisePyramid,GL_CAB_ABlock
-#from Yolo11CBAM.GLD import MBFPN,GLCAB
-#from Yolo11CBAM.MSAF_YOLO_Module import MFSPPF_Module, MSAF_Block, MSConcat, MSFocus_Module
-
+# from Yolo11CBAM.custom_modules import CBAM,TransformerBlock, GL_CAB, GL_CAB_PSABlock,DilatedDepthwisePyramid,GL_CAB_ABlock
+# from Yolo11CBAM.GLD import MBFPN,GLCAB
+# from Yolo11CBAM.MSAF_YOLO_Module import MFSPPF_Module, MSAF_Block, MSConcat, MSFocus_Module
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
     AIFI,
@@ -23,24 +22,35 @@ from ultralytics.nn.modules import (
     C3,
     C3TR,
     ELAN1,
+    GL_CAB,
+    GL_CAB_DW,
+    GL_CAB_PSA,
     OBB,
     OBB26,
     PSA,
     SPP,
     SPPELAN,
     SPPF,
+    TOSA,
     A2C2f,
     AConv,
+    AdaptA2C2f,
     ADown,
+    AvgPoolDWConv,
     Bottleneck,
     BottleneckCSP,
+    BottleneckSimAM,
     C2f,
+    C2f_GLCAB,
     C2fAttn,
     C2fCIB,
     C2fPSA,
     C3Ghost,
     C3k2,
+    C3kSimAM,
     C3x,
+    CA2C2f,
+    CARAFEFast,
     CBFuse,
     CBLinear,
     Classify,
@@ -51,6 +61,7 @@ from ultralytics.nn.modules import (
     Detect,
     DWConv,
     DWConvTranspose2d,
+    FlexSimAM,
     Focus,
     GhostBottleneck,
     GhostConv,
@@ -61,26 +72,26 @@ from ultralytics.nn.modules import (
     LRPCHead,
     Pose,
     Pose26,
+    PWCConv,
     RepC3,
     RepConv,
     RepNCSPELAN4,
     RepVGGDW,
     ResNetLayer,
     RTDETRDecoder,
+    S2DResConv,
+    SACConv,
     SCDown,
     Segment,
     Segment26,
+    SimAM,
+    SPDConv,
     TorchVision,
     WorldDetect,
     YOLOEDetect,
     YOLOESegment,
     YOLOESegment26,
     v10Detect,
-    CA2C2f,
-    GL_CAB,
-    C2f_GLCAB,
-    SPDConv, AdaptA2C2f,GL_CAB_DW,TOSA, AvgPoolDWConv,
-    SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1620,8 +1631,20 @@ def parse_model(d, ch, verbose=True):
             CA2C2f,
             GL_CAB,
             C2f_GLCAB,
-            SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
+            SPDConv,
+            GL_CAB_DW,
+            TOSA,
+            AvgPoolDWConv,
+            AdaptA2C2f,
+            SimAM,
+            BottleneckSimAM,
+            C3kSimAM,
+            FlexSimAM,
+            CARAFEFast,
+            S2DResConv,
+            SACConv,
+            GL_CAB_PSA,
+            PWCConv,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1644,8 +1667,20 @@ def parse_model(d, ch, verbose=True):
             CA2C2f,
             GL_CAB,
             C2f_GLCAB,
-            SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
+            SPDConv,
+            GL_CAB_DW,
+            TOSA,
+            AvgPoolDWConv,
+            AdaptA2C2f,
+            SimAM,
+            BottleneckSimAM,
+            C3kSimAM,
+            FlexSimAM,
+            CARAFEFast,
+            S2DResConv,
+            SACConv,
+            GL_CAB_PSA,
+            PWCConv,
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
