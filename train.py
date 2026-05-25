@@ -1,7 +1,8 @@
 # train.py
 
 # /Users/osias/Documents/PHD/CODE/data/data.yaml
-import os, sys
+import os
+
 import torch
 
 from ultralytics import YOLO
@@ -11,22 +12,21 @@ def get_device():
     if torch.cuda.is_available():
         return 0  # ou 'cuda'
     elif torch.backends.mps.is_available():
-        return 'mps'
+        return "mps"
     else:
         try:
             import torch_xla.core.xla_model as xm
+
             return xm.xla_device()
         except ImportError:
-            return 'cpu'
+            return "cpu"
 
 
 device = get_device()
 
 
 def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
-    """
-    Fonction principale pour entraîner le modèle YOLOv11 customisé.
-    """
+    """Function principale pour entraîner le modèle YOLOv11 customisé."""
     # S'assurer que le script s'exécute dans le bon répertoire
     # pour qu'il puisse trouver les autres fichiers.
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -35,11 +35,11 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     # On charge le modèle pré-entrainé standard. La librairie va correctement
     # parser le nom 'yolov11n.pt' et définir l'échelle ('n') du modèle.
     # C'est cette étape qui résout l'erreur 'UnboundLocalError'.
-    print(f"Chargement du modèle de base (modelpath)")
+    print("Chargement du modèle de base (modelpath)")
     model = YOLO(modelpath)
     print("Modèle de base chargé.")
 
-    if p == True:
+    if p:
         if v == 11:
             model = model.load("yolo11n.pt")
         elif v == 12:
@@ -55,7 +55,7 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     print("Début de l'entraînement avec l'architecture yolov11n-cbam.yaml...")
     # results = model.train(
     # cfg='yolov11n-cbam.yaml',  # Spécifie notre architecture customisée ici
-    # data='/Users/osias/Documents/PHD/CODE/data/data.yaml',         # EXEMPLE: à remplacer par votre fichier de données
+    # data='/Users/osias/Documents/PHD/CODE/data/data.yaml',         # EXAMPLE: à remplacer par votre fichier de données
     # data=data,
     # epochs=epochs,
     # imgsz=imgsz,
@@ -65,33 +65,27 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     # name=outname, # Nom de l'expérience
     # )
 
-    results = model.train(
+    model.train(
         data=data,
         epochs=epochs,
-
         # ── Résolution & batch ────────────────────────────────────────────────
         imgsz=imgsz,
         batch=16,  # Fixe — pas auto-batch pour garantir l'équité entre modèles
-
         # ── Device ────────────────────────────────────────────────────────────
         device=device,
         amp=True,
-
         # ── Optimiseur ────────────────────────────────────────────────────────
-        optimizer='SGD',
+        optimizer="SGD",
         lr0=0.01,
         lrf=0.01,  # LR final = lr0 × lrf = 0.0001
         momentum=0.937,
         weight_decay=0.0005,
-
         # ── Warm-up ───────────────────────────────────────────────────────────
         warmup_epochs=5.0,  # Plus long pour SPD/GLCAB (branches à initialiser)
         warmup_momentum=0.8,
         warmup_bias_lr=0.1,
-
         # ── Scheduler ─────────────────────────────────────────────────────────
         cos_lr=True,
-
         # ── Augmentation ──────────────────────────────────────────────────────
         mosaic=1.0,
         close_mosaic=30,  # Désactive mosaic aux 30 dernières epochs sur 600
@@ -104,12 +98,10 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
         hsv_h=0.015,
         hsv_s=0.7,
         hsv_v=0.4,
-
         # ── Loss weights ──────────────────────────────────────────────────────
         box=7.5,
         cls=0.5,
         dfl=1.5,
-
         # ── Sauvegarde & monitoring ───────────────────────────────────────────
         # patience=100,  # Sur 600 epochs, laisser 100 epochs sans amélioration
         save=True,
@@ -117,7 +109,6 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
         plots=True,
         exist_ok=True,
         seed=42,
-
         name=outname,
     )
 
@@ -131,19 +122,19 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     print(metrics)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
     # Cette instruction est cruciale pour l'entraînement multi-GPU et sur certains systèmes.
     parser = argparse.ArgumentParser(description="Training script with custom arguments")
 
-    parser.add_argument('-model', type=str, required=True, help="Path to YOLO model YAML file")
-    parser.add_argument('-data', type=str, required=True, help="Path to dataset .yaml file")
-    parser.add_argument('-outname', type=str, required=True, help="Experiment output name")
-    parser.add_argument('-epochs', type=int, required=True, help="Experiment output epochs")
-    parser.add_argument('-imgsz', type=int, default=640, help="Image size for training (default: 640)")
-    parser.add_argument('-v', type=int, default=11, help="Version yolo (default: 11)")
-    parser.add_argument('-p', type=bool, default=True, help="Load pretrained model (default: True)")
+    parser.add_argument("-model", type=str, required=True, help="Path to YOLO model YAML file")
+    parser.add_argument("-data", type=str, required=True, help="Path to dataset .yaml file")
+    parser.add_argument("-outname", type=str, required=True, help="Experiment output name")
+    parser.add_argument("-epochs", type=int, required=True, help="Experiment output epochs")
+    parser.add_argument("-imgsz", type=int, default=640, help="Image size for training (default: 640)")
+    parser.add_argument("-v", type=int, default=11, help="Version yolo (default: 11)")
+    parser.add_argument("-p", type=bool, default=True, help="Load pretrained model (default: True)")
 
     args = parser.parse_args()
 
