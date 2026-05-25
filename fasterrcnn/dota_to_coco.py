@@ -1,28 +1,38 @@
 # dota_to_coco.py
 
-import os
 import json
-import cv2
 from pathlib import Path
+
+import cv2
 
 # Catégories DOTA v1.5
 DOTA_CATEGORIES = [
-    "plane", "ship", "storage-tank", "baseball-diamond",
-    "tennis-court", "basketball-court", "ground-track-field",
-    "harbor", "bridge", "large-vehicle", "small-vehicle",
-    "helicopter", "roundabout", "soccer-ball-field", "swimming-pool"
+    "plane",
+    "ship",
+    "storage-tank",
+    "baseball-diamond",
+    "tennis-court",
+    "basketball-court",
+    "ground-track-field",
+    "harbor",
+    "bridge",
+    "large-vehicle",
+    "small-vehicle",
+    "helicopter",
+    "roundabout",
+    "soccer-ball-field",
+    "swimming-pool",
 ]
 
 CAT2ID = {cat: i + 1 for i, cat in enumerate(DOTA_CATEGORIES)}
 
 
 def parse_dota_annotation(txt_path):
-    """Parse un fichier annotation DOTA.
-    Format : x1 y1 x2 y2 x3 y3 x4 y4 category difficulty
-    On convertit le quadrilatère en bbox horizontal (xmin, ymin, xmax, ymax).
+    """Parse un fichier annotation DOTA. Format : x1 y1 x2 y2 x3 y3 x4 y4 category difficulty On convertit le
+    quadrilatère en bbox horizontal (xmin, ymin, xmax, ymax).
     """
     objects = []
-    with open(txt_path, "r") as f:
+    with open(txt_path) as f:
         lines = f.readlines()
 
     for line in lines:
@@ -48,11 +58,13 @@ def parse_dota_annotation(txt_path):
         if w <= 0 or h <= 0:
             continue
 
-        objects.append({
-            "category": category,
-            "bbox": [xmin, ymin, w, h],   # format COCO [x, y, w, h]
-            "area": w * h,
-        })
+        objects.append(
+            {
+                "category": category,
+                "bbox": [xmin, ymin, w, h],  # format COCO [x, y, w, h]
+                "area": w * h,
+            }
+        )
     return objects
 
 
@@ -84,22 +96,26 @@ def dota_to_coco(images_dir, labels_dir, output_json):
         if not txt_path.exists():
             continue
 
-        coco["images"].append({
-            "id": img_id,
-            "file_name": img_path.name,
-            "width": w,
-            "height": h,
-        })
+        coco["images"].append(
+            {
+                "id": img_id,
+                "file_name": img_path.name,
+                "width": w,
+                "height": h,
+            }
+        )
 
         for obj in parse_dota_annotation(txt_path):
-            coco["annotations"].append({
-                "id": ann_id,
-                "image_id": img_id,
-                "category_id": CAT2ID[obj["category"]],
-                "bbox": obj["bbox"],
-                "area": obj["area"],
-                "iscrowd": 0,
-            })
+            coco["annotations"].append(
+                {
+                    "id": ann_id,
+                    "image_id": img_id,
+                    "category_id": CAT2ID[obj["category"]],
+                    "bbox": obj["bbox"],
+                    "area": obj["area"],
+                    "iscrowd": 0,
+                }
+            )
             ann_id += 1
 
         img_id += 1
@@ -107,10 +123,10 @@ def dota_to_coco(images_dir, labels_dir, output_json):
     with open(output_json, "w") as f:
         json.dump(coco, f)
 
-    print(f"Saved {output_json} — {img_id-1} images, {ann_id-1} annotations")
+    print(f"Saved {output_json} — {img_id - 1} images, {ann_id - 1} annotations")
 
 
-# ── Utilisation ───────────────────────────────────────────────────────────────
+# ── Utilization ───────────────────────────────────────────────────────────────
 dota_to_coco(
     images_dir="/kaggle/input/dota-v15/train/images",
     labels_dir="/kaggle/input/dota-v15/train/labelTxt",
