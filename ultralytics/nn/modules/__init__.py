@@ -17,6 +17,7 @@ Examples:
     >>> subprocess.run(f"onnxslim {f} {f} && open {f}", shell=True, check=True)  # pip install onnxslim
 """
 
+from .adapt_a2c2f import AdaptA2C2f
 from .block import (
     C1,
     C2,
@@ -31,8 +32,6 @@ from .block import (
     SPPELAN,
     SPPF,
     A2C2f,
-    CA2C2f,
-    GL_CAB_CABlock,
     AConv,
     ADown,
     Attention,
@@ -46,10 +45,12 @@ from .block import (
     C3Ghost,
     C3k2,
     C3x,
+    CA2C2f,
     CBFuse,
     CBLinear,
     ContrastiveHead,
     GhostBottleneck,
+    GL_CAB_CABlock,
     HGBlock,
     HGStem,
     ImagePoolingAttn,
@@ -78,6 +79,7 @@ from .conv import (
     RepConv,
     SpatialAttention,
 )
+from .gl_cab import GL_CAB, GL_CAB_DW, GL_CAB_PSA, C2f_GLCAB, SPDConv  # ,GL_CAB_PSA
 from .head import (
     OBB,
     OBB26,
@@ -95,6 +97,10 @@ from .head import (
     YOLOESegment26,
     v10Detect,
 )
+from .pooling import LearnableLPPool2d
+from .pwc_conv import PWCConv
+from .sac_conv import SACConv
+from .tosa import TOSA, AvgPoolDWConv
 from .transformer import (
     AIFI,
     MLP,
@@ -107,13 +113,7 @@ from .transformer import (
     TransformerEncoderLayer,
     TransformerLayer,
 )
-from .gl_cab import GL_CAB, C2f_GLCAB,SPDConv, GL_CAB_PSA,GL_CAB_DW#,GL_CAB_PSA
-from .uva import DWR,S2DResConv, SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast
-from .adapt_a2c2f import AdaptA2C2f
-from .sac_conv import SACConv
-from .pwc_conv import PWCConv
-from .pooling import LearnableLPPool2d
-from .tosa import TOSA, AvgPoolDWConv
+from .uva import DWR, BottleneckSimAM, C3kSimAM, CARAFEFast, FlexSimAM, S2DResConv, SimAM
 
 __all__ = (
     "AIFI",
@@ -125,7 +125,11 @@ __all__ = (
     "CBAM",
     "CIB",
     "DFL",
+    "DWR",
     "ELAN1",
+    "GL_CAB",
+    "GL_CAB_DW",
+    "GL_CAB_PSA",
     "MLP",
     "OBB",
     "OBB26",
@@ -134,21 +138,25 @@ __all__ = (
     "SPPELAN",
     "SPPF",
     "A2C2f",
-    "CA2C2f",
-    "GL_CAB_CABlock"   ,
     "AConv",
     "ADown",
+    "AdaptA2C2f",
     "Attention",
     "BNContrastiveHead",
     "Bottleneck",
     "BottleneckCSP",
+    "BottleneckSimAM",
     "C2f",
     "C2fAttn",
     "C2fCIB",
     "C2fPSA",
+    "C2f_GLCAB",
     "C3Ghost",
     "C3k2",
+    "C3kSimAM",
     "C3x",
+    "CA2C2f",
+    "CARAFEFast",
     "CBFuse",
     "CBLinear",
     "ChannelAttention",
@@ -163,7 +171,9 @@ __all__ = (
     "DeformableTransformerDecoder",
     "DeformableTransformerDecoderLayer",
     "Detect",
+    "FlexSimAM",
     "Focus",
+    "GL_CAB_CABlock",
     "GhostBottleneck",
     "GhostConv",
     "HGBlock",
@@ -172,10 +182,12 @@ __all__ = (
     "Index",
     "LRPCHead",
     "LayerNorm2d",
+    "LearnableLPPool2d",
     "LightConv",
     "MLPBlock",
     "MSDeformAttn",
     "MaxSigmoidAttnBlock",
+    "PWCConv",
     "Pose",
     "Pose26",
     "Proto",
@@ -185,9 +197,13 @@ __all__ = (
     "RepNCSPELAN4",
     "RepVGGDW",
     "ResNetLayer",
+    "S2DResConv",
+    "SACConv",
     "SCDown",
+    "SPDConv",
     "Segment",
     "Segment26",
+    "SimAM",
     "SpatialAttention",
     "TorchVision",
     "TransformerBlock",
@@ -198,12 +214,4 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
-    "GL_CAB",
-    "C2f_GLCAB",
-    "SPDConv",
-    "AdaptA2C2f",
-    "DWR",
-    "S2DResConv",
-    "LearnableLPPool2d","GL_CAB_DW",
-    "SimAM", "BottleneckSimAM", "C3kSimAM", "FlexSimAM", "CARAFEFast","SACConv","GL_CAB_PSA","PWCConv"
 )
