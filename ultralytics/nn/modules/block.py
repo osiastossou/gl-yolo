@@ -225,7 +225,8 @@ class SPPF(nn.Module):
         c_ = c1 // 2  # hidden channels
         self.cv1 = Conv(c1, c_, 1, 1, act=False)
         self.cv2 = Conv(c_ * (n + 1), c2, 1, 1)
-        self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+        #self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+        self.m = nn.AvgPool2d(kernel_size=k, stride=1)
         self.n = n
         self.add = shortcut and c1 == c2
 
