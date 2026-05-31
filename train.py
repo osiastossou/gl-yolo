@@ -117,6 +117,7 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
         plots=True,
         exist_ok=True,
         seed=42,
+        resume=True,
 
         name=outname,
     )
