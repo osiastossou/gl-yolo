@@ -71,7 +71,7 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
 
         # ── Résolution & batch ────────────────────────────────────────────────
         imgsz=imgsz,
-        batch=0.5 ,  # Fixe — pas auto-batch pour garantir l'équité entre modèles
+        batch=16 ,  # Fixe — pas auto-batch pour garantir l'équité entre modèles
 
         # ── Device ────────────────────────────────────────────────────────────
         device=device,
