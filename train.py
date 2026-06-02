@@ -84,26 +84,11 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
         momentum=0.937,
         weight_decay=0.0005,
 
-        # ── Warm-up ───────────────────────────────────────────────────────────
-        warmup_epochs=5.0,  # Plus long pour SPD/GLCAB (branches à initialiser)
-        warmup_momentum=0.8,
-        warmup_bias_lr=0.1,
+
 
         # ── Scheduler ─────────────────────────────────────────────────────────
         cos_lr=True,
 
-        # ── Augmentation ──────────────────────────────────────────────────────
-        mosaic=1.0,
-        close_mosaic=30,  # Désactive mosaic aux 30 dernières epochs sur 600
-        copy_paste=0.3,
-        translate=0.1,
-        scale=0.5,
-        fliplr=0.5,
-        flipud=0.0,
-        degrees=0.0,
-        hsv_h=0.015,
-        hsv_s=0.7,
-        hsv_v=0.4,
 
         # ── Loss weights ──────────────────────────────────────────────────────
         box=7.5,
