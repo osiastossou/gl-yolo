@@ -601,7 +601,7 @@ class ConfusionMatrix(DataExportMixin):
         names = list(self.names.values()) if self.task == "classify" else [*list(self.names.values()), "background"]
         clean_names, seen = [], set()
         for name in names:
-            clean_name = re.sub(r_paper"[^a-zA-Z0-9_]", "_", name)
+            clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
             original_clean = clean_name
             counter = 1
             while clean_name.lower() in seen:

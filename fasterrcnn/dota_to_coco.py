@@ -22,7 +22,7 @@ def parse_dota_annotation(txt_path):
     On convertit le quadrilatère en bbox horizontal (xmin, ymin, xmax, ymax).
     """
     objects = []
-    with open(txt_path, "r_paper") as f:
+    with open(txt_path, "r") as f:
         lines = f.readlines()
 
     for line in lines:

@@ -111,7 +111,7 @@ class TensorFlowBackend(BaseBackend):
 
             # Load metadata
             try:
-                with zipfile.ZipFile(weight, "r_paper") as zf:
+                with zipfile.ZipFile(weight, "r") as zf:
                     name = zf.namelist()[0]
                     contents = zf.read(name).decode("utf-8")
                     if name == "metadata.json":

@@ -48,8 +48,8 @@ from ultralytics.utils.tqdm import TQDM
 os.environ["JUPYTER_PLATFORM_DIRS"] = "1"  # fix DeprecationWarning: Jupyter is migrating to use standard platformdirs
 DOCS = Path(__file__).parent.resolve()
 SITE = DOCS.parent / "site"
-LINK_PATTERN = re.compile(r_paper"(https?://[^\s()<>]*[^\s()<>.,:;!?\'\"])")
-TITLE_PATTERN = re.compile(r_paper"<title>(.*?)</title>", flags=re.IGNORECASE | re.DOTALL)
+LINK_PATTERN = re.compile(r"(https?://[^\s()<>]*[^\s()<>.,:;!?\'\"])")
+TITLE_PATTERN = re.compile(r"<title>(.*?)</title>", flags=re.IGNORECASE | re.DOTALL)
 MD_LINK_PATTERN = re.compile(r_paper'(["\']?)([^"\'>\s]+?)\.md(["\']?)')
 DOC_KIND_LABELS = {"Class", "Function", "Method", "Property"}
 DOC_KIND_COLORS = {
@@ -164,7 +164,7 @@ def _process_html_file(html_file: Path) -> bool:
             changed = True
 
     if rel_path == "404.html":
-        new_content = re.sub(r_paper"<title>.*?</title>", "<title>Ultralytics Docs - Not Found</title>", content)
+        new_content = re.sub(r"<title>.*?</title>", "<title>Ultralytics Docs - Not Found</title>", content)
         if new_content != content:
             content, changed = new_content, True
 
@@ -326,18 +326,18 @@ def _rewrite_md_links(content: str) -> str:
     for line in content.split("\n"):
         if "github.com" not in line:
             line = line.replace("index.md", "")
-            line = MD_LINK_PATTERN.sub(r_paper"\1\2/\3", line)
+            line = MD_LINK_PATTERN.sub(r"\1\2/\3", line)
         lines.append(line)
     return "\n".join(lines)
 
 
 # Precompiled regex patterns for minification
-HTML_COMMENT = re.compile(r_paper"<!--[\s\S]*?-->")
-HTML_PRESERVE = re.compile(r_paper"<(pre|code|textarea|script)[^>]*>[\s\S]*?</\1>", re.IGNORECASE)
-HTML_TAG_SPACE = re.compile(r_paper">\s+<")
-HTML_MULTI_SPACE = re.compile(r_paper"\s{2,}")
-HTML_EMPTY_LINE = re.compile(r_paper"^\s*$\n", re.MULTILINE)
-CSS_COMMENT = re.compile(r_paper"/\*[\s\S]*?\*/")
+HTML_COMMENT = re.compile(r"<!--[\s\S]*?-->")
+HTML_PRESERVE = re.compile(r"<(pre|code|textarea|script)[^>]*>[\s\S]*?</\1>", re.IGNORECASE)
+HTML_TAG_SPACE = re.compile(r">\s+<")
+HTML_MULTI_SPACE = re.compile(r"\s{2,}")
+HTML_EMPTY_LINE = re.compile(r"^\s*$\n", re.MULTILINE)
+CSS_COMMENT = re.compile(r"/\*[\s\S]*?\*/")
 
 
 def remove_comments_and_empty_lines(content: str, file_type: str) -> str:
@@ -376,13 +376,13 @@ def remove_comments_and_empty_lines(content: str, file_type: str) -> str:
     elif file_type == "css":
         content = CSS_COMMENT.sub("", content)  # Remove CSS comments
         # Remove whitespace around specific characters
-        content = re.sub(r_paper"\s*([{}:;,])\s*", r_paper"\1", content)
+        content = re.sub(r"\s*([{}:;,])\s*", r"\1", content)
         # Remove empty lines
-        content = re.sub(r_paper"^\s*\n", "", content, flags=re.MULTILINE)
+        content = re.sub(r"^\s*\n", "", content, flags=re.MULTILINE)
         # Collapse multiple spaces to single space
-        content = re.sub(r_paper"\s{2,}", " ", content)
+        content = re.sub(r"\s{2,}", " ", content)
         # Remove all newlines
-        content = re.sub(r_paper"\n", "", content)
+        content = re.sub(r"\n", "", content)
     elif file_type == "js":
         # Handle JS single-line comments (preserving http:// and https://)
         lines = content.split("\n")
@@ -396,15 +396,15 @@ def remove_comments_and_empty_lines(content: str, file_type: str) -> str:
         content = "\n".join(processed_lines)
 
         # Remove JS multi-line comments and clean whitespace
-        content = re.sub(r_paper"/\*[\s\S]*?\*/", "", content)
+        content = re.sub(r"/\*[\s\S]*?\*/", "", content)
         # Remove empty lines
-        content = re.sub(r_paper"^\s*\n", "", content, flags=re.MULTILINE)
+        content = re.sub(r"^\s*\n", "", content, flags=re.MULTILINE)
         # Collapse multiple spaces to single space
-        content = re.sub(r_paper"\s{2,}", " ", content)
+        content = re.sub(r"\s{2,}", " ", content)
 
         # Safe space removal around punctuation and operators (never include colons - breaks JS)
-        content = re.sub(r_paper"\s*([;{}])\s*", r_paper"\1", content)
-        content = re.sub(r_paper"(\w)\s*\(|\)\s*{|\s*([+\-*/=])\s*", lambda m: m.group(0).replace(" ", ""), content)
+        content = re.sub(r"\s*([;{}])\s*", r"\1", content)
+        content = re.sub(r"(\w)\s*\(|\)\s*{|\s*([+\-*/=])\s*", lambda m: m.group(0).replace(" ", ""), content)
 
     return content
 
@@ -646,7 +646,7 @@ def main():
         sitemap = SITE / "sitemap.xml"
         if sitemap.exists():
             content = sitemap.read_text()
-            in_sitemap = set(re.findall(r_paper"<loc>([^<]+)</loc>", content))
+            in_sitemap = set(re.findall(r"<loc>([^<]+)</loc>", content))
             all_pages = {
                 f"https://docs.ultralytics.com/{f.relative_to(SITE).as_posix().replace('index.html', '')}"
                 for f in SITE.rglob("*.html")

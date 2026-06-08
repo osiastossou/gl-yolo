@@ -124,7 +124,7 @@ def coco91_to_coco80_class() -> list[int]:
 
 
 def coco80_to_coco91_class() -> list[int]:
-    r_paper"""Convert 80-index (val2014) to 91-index (paper).
+    r"""Convert 80-index (val2014) to 91-index (paper).
 
     Returns:
         (list[int]): A list of 80 class IDs where each value is the corresponding 91-index class ID.
@@ -482,7 +482,7 @@ def convert_dota_to_yolo_obb(dota_root_path: str):
         orig_label_path = orig_label_dir / f"{image_name}.txt"
         save_path = save_dir / f"{image_name}.txt"
 
-        with orig_label_path.open("r_paper") as f, save_path.open("w") as g:
+        with orig_label_path.open("r") as f, save_path.open("w") as g:
             lines = f.readlines()
             for line in lines:
                 parts = line.strip().split()

@@ -49,10 +49,10 @@ INCLUDE_SPECIAL_METHODS = {
     "__getattr__",
 }
 PROPERTY_DECORATORS = {"property", "cached_property"}
-CLASS_DEF_RE = re.compile(r_paper"(?:^|\n)class\s(\w+)(?:\(|:)")
-FUNC_DEF_RE = re.compile(r_paper"(?:^|\n)(?:async\s+)?def\s(\w+)\(")
-SECTION_ENTRY_RE = re.compile(r_paper"([\w*]+)\s*(?:\(([^)]+)\))?:\s*(.*)")
-RETURNS_RE = re.compile(r_paper"([^:]+):\s*(.*)")
+CLASS_DEF_RE = re.compile(r"(?:^|\n)class\s(\w+)(?:\(|:)")
+FUNC_DEF_RE = re.compile(r"(?:^|\n)(?:async\s+)?def\s(\w+)\(")
+SECTION_ENTRY_RE = re.compile(r"([\w*]+)\s*(?:\(([^)]+)\))?:\s*(.*)")
+RETURNS_RE = re.compile(r"([^:]+):\s*(.*)")
 
 
 @dataclass
@@ -909,7 +909,7 @@ def render_item(item: DocItem, module_url: str, module_path: str, level: int = 2
     """Render a class, function, or method to Markdown."""
     anchor = item_anchor(item)
     title_prefix = item.kind.capitalize()
-    anchor_id = anchor.replace("_", r_paper"\_")  # escape underscores so attr_list keeps them in the id
+    anchor_id = anchor.replace("_", r"\_")  # escape underscores so attr_list keeps them in the id
     heading = f"{'#' * level} {title_prefix} `{display_qualname(item)}` {{#{anchor_id}}}"
     signature_block = f"```python\n{item.signature}\n```\n"
 
@@ -1072,7 +1072,7 @@ def extract_document_paths(yaml_section: str) -> list[str]:
     """Extract document paths from a YAML section, ignoring formatting and structure."""
     paths = []
     # Match all paths that appear after a colon in the YAML
-    path_matches = re.findall(r_paper":\s*([^\s][^:\n]*?)(?:\n|$)", yaml_section)
+    path_matches = re.findall(r":\s*([^\s][^:\n]*?)(?:\n|$)", yaml_section)
     for path in path_matches:
         # Clean up the path
         path = path.strip()
@@ -1086,7 +1086,7 @@ def update_mkdocs_file(reference_yaml: str) -> None:
     mkdocs_content = MKDOCS_YAML.read_text()
 
     # Find the top-level Reference section
-    ref_pattern = r_paper"(\n  - Reference:[\s\S]*?)(?=\n  - \w|$)"
+    ref_pattern = r"(\n  - Reference:[\s\S]*?)(?=\n  - \w|$)"
     ref_match = re.search(ref_pattern, mkdocs_content)
 
     # Build new section with proper indentation
@@ -1126,7 +1126,7 @@ def update_mkdocs_file(reference_yaml: str) -> None:
         except FileNotFoundError:
             LOGGER.warning("prettier not found (install Node.js or run 'npm i -g prettier'), skipping YAML formatting")
         LOGGER.info(f"Updated Reference section in {MKDOCS_YAML}")
-    elif help_match := re.search(r_paper"(\n  - Help:)", mkdocs_content):
+    elif help_match := re.search(r"(\n  - Help:)", mkdocs_content):
         # No existing Reference section, we need to add it
         help_section = help_match.group(1)
         # Insert before Help section
