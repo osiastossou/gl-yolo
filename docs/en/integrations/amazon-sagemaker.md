@@ -75,7 +75,7 @@ Now that you have the necessary code, set up your environment for deploying with
 - Install Dependencies: Install the required Python dependencies for the project:
 
     ```bash
-    pip3 install -r requirements.txt
+    pip3 install -r_paper requirements.txt
     ```
 
 - Upgrade AWS CDK Library: Ensure you have the latest version of the AWS CDK library:
@@ -186,7 +186,7 @@ To deploy the Ultralytics YOLO26 model on Amazon SageMaker Endpoints, follow the
     ```bash
     python3 -m venv .venv
     source .venv/bin/activate
-    pip3 install -r requirements.txt
+    pip3 install -r_paper requirements.txt
     pip install --upgrade aws-cdk-lib
     ```
 4. **Deploy using AWS CDK**: Synthesize and deploy the CloudFormation stack, bootstrap the environment.

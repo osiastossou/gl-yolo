@@ -15,7 +15,7 @@ First, ensure you have the necessary environment set up. Clone the YOLOv5 reposi
 ```bash
 git clone https://github.com/ultralytics/yolov5 # Clone the repository
 cd yolov5
-pip install -r requirements.txt # Install dependencies
+pip install -r_paper requirements.txt # Install dependencies
 ```
 
 ## Train On Custom Data
@@ -269,7 +269,7 @@ Training YOLOv5 on a custom dataset involves several key steps:
     ```bash
     git clone https://github.com/ultralytics/yolov5
     cd yolov5
-    pip install -r requirements.txt
+    pip install -r_paper requirements.txt
     ```
 3.  **Create Dataset Configuration**: Define dataset paths, number of classes, and class names in a `dataset.yaml` file.
 4.  **Start Training**: Execute the `train.py` script, providing paths to your `dataset.yaml`, desired pretrained weights (e.g., `yolov5s.pt`), image size, batch size, and the number of epochs.

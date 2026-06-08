@@ -15,7 +15,7 @@ Clone repo and install [requirements.txt](https://github.com/ultralytics/yolov5/
 ```bash
 git clone https://github.com/ultralytics/yolov5 # clone
 cd yolov5
-pip install -r requirements.txt # install
+pip install -r_paper requirements.txt # install
 ```
 
 For [TensorRT](https://developer.nvidia.com/tensorrt) export example (requires GPU) see our Colab [notebook](https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb#scrollTo=VTRwsvA9u7ln&line=2&uniqifier=1) appendix section. <a href="https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>

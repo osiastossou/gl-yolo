@@ -43,8 +43,8 @@ class SAM(Model):
     Examples:
         >>> sam = SAM("sam_b.pt")
         >>> results = sam.predict("image.jpg", points=[[500, 375]])
-        >>> for r in results:
-        ...     print(f"Detected {len(r.masks)} masks")
+        >>> for r_paper in results:
+        ...     print(f"Detected {len(r_paper.masks)} masks")
     """
 
     def __init__(self, model: str = "sam_b.pt") -> None:
@@ -100,8 +100,8 @@ class SAM(Model):
         Examples:
             >>> sam = SAM("sam_b.pt")
             >>> results = sam.predict("image.jpg", points=[[500, 375]])
-            >>> for r in results:
-            ...     print(f"Detected {len(r.masks)} masks")
+            >>> for r_paper in results:
+            ...     print(f"Detected {len(r_paper.masks)} masks")
         """
         overrides = dict(conf=0.25, task="segment", mode="predict", imgsz=1024)
         kwargs = {**overrides, **kwargs}

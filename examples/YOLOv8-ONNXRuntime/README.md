@@ -13,7 +13,7 @@ Clone the repository and install the packages listed in the `requirements.txt` f
 ```bash
 git clone https://github.com/ultralytics/ultralytics.git
 cd ultralytics/examples/YOLOv8-ONNXRuntime
-pip install -r requirements.txt
+pip install -r_paper requirements.txt
 ```
 
 ### Installing ONNX Runtime Backend

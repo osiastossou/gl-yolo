@@ -391,7 +391,7 @@ To install and train a custom YOLOv7 model, follow these steps:
 2. Navigate to the cloned directory and install dependencies:
     ```bash
     cd yolov7
-    pip install -r requirements.txt
+    pip install -r_paper requirements.txt
     ```
 3. Prepare your dataset and configure the model parameters according to the [usage instructions](https://github.com/WongKinYiu/yolov7) provided in the repository.
    For further guidance, visit the YOLOv7 GitHub repository for the latest information and updates.

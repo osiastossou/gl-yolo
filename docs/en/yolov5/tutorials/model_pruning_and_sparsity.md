@@ -26,7 +26,7 @@ Clone repo and install [requirements.txt](https://github.com/ultralytics/yolov5/
 ```bash
 git clone https://github.com/ultralytics/yolov5 # clone
 cd yolov5
-pip install -r requirements.txt # install
+pip install -r_paper requirements.txt # install
 ```
 
 ## Test Baseline Performance

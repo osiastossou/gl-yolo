@@ -171,8 +171,8 @@ class Model(torch.nn.Module):
         Examples:
             >>> model = YOLO("yolo26n.pt")
             >>> results = model("https://ultralytics.com/images/bus.jpg")
-            >>> for r in results:
-            ...     print(f"Detected {len(r)} objects in image")
+            >>> for r_paper in results:
+            ...     print(f"Detected {len(r_paper)} objects in image")
         """
         return self.predict(source, stream, **kwargs)
 
@@ -504,8 +504,8 @@ class Model(torch.nn.Module):
         Examples:
             >>> model = YOLO("yolo26n.pt")
             >>> results = model.predict(source="path/to/image.jpg", conf=0.25)
-            >>> for r in results:
-            ...     print(r.boxes.data)  # print detection bounding boxes
+            >>> for r_paper in results:
+            ...     print(r_paper.boxes.data)  # print detection bounding boxes
 
         Notes:
             - If 'source' is not provided, it defaults to the ASSETS constant with a warning.
@@ -561,8 +561,8 @@ class Model(torch.nn.Module):
         Examples:
             >>> model = YOLO("yolo26n.pt")
             >>> results = model.track(source="path/to/video.mp4", show=True)
-            >>> for r in results:
-            ...     print(r.boxes.id)  # print tracking IDs
+            >>> for r_paper in results:
+            ...     print(r_paper.boxes.id)  # print tracking IDs
 
         Notes:
             - This method sets a default confidence threshold of 0.1 for ByteTrack-based tracking.

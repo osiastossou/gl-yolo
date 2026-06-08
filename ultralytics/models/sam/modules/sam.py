@@ -663,25 +663,25 @@ class SAM2Model(torch.nn.Module):
             t_pos_and_prevs = [(0, out) for out in selected_cond_outputs.values()]
             # Add last (self.num_maskmem - 1) frames before current frame for non-conditioning memory
             # the earliest one has t_pos=1 and the latest one has t_pos=self.num_maskmem-1
-            # We also allow taking the memory frame non-consecutively (with r>1), in which case
-            # we take (self.num_maskmem - 2) frames among every r-th frames plus the last frame.
+            # We also allow taking the memory frame non-consecutively (with r_paper>1), in which case
+            # we take (self.num_maskmem - 2) frames among every r_paper-th frames plus the last frame.
             r = 1 if self.training else self.memory_temporal_stride_for_eval
             for t_pos in range(1, self.num_maskmem):
                 t_rel = self.num_maskmem - t_pos  # how many frames before current frame
                 if t_rel == 1:
-                    # for t_rel == 1, we take the last frame (regardless of r)
+                    # for t_rel == 1, we take the last frame (regardless of r_paper)
                     prev_frame_idx = frame_idx + t_rel if track_in_reverse else frame_idx - t_rel
                 elif not track_in_reverse:
-                    # first find the nearest frame among every r-th frames before this frame
-                    # for r=1, this would be (frame_idx - 2)
+                    # first find the nearest frame among every r_paper-th frames before this frame
+                    # for r_paper=1, this would be (frame_idx - 2)
                     prev_frame_idx = ((frame_idx - 2) // r) * r
-                    # then seek further among every r-th frames
+                    # then seek further among every r_paper-th frames
                     prev_frame_idx = prev_frame_idx - (t_rel - 2) * r
                 else:
-                    # first find the nearest frame among every r-th frames after this frame
-                    # for r=1, this would be (frame_idx + 2)
+                    # first find the nearest frame among every r_paper-th frames after this frame
+                    # for r_paper=1, this would be (frame_idx + 2)
                     prev_frame_idx = -(-(frame_idx + 2) // r) * r
-                    # then seek further among every r-th frames
+                    # then seek further among every r_paper-th frames
                     prev_frame_idx = prev_frame_idx + (t_rel - 2) * r
                 out = output_dict["non_cond_frame_outputs"].get(prev_frame_idx, None)
                 if out is None:

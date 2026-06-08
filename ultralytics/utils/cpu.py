@@ -50,7 +50,7 @@ class CPUInfo:
                 try:
                     import winreg as wr
 
-                    with wr.OpenKey(wr.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
+                    with wr.OpenKey(wr.HKEY_LOCAL_MACHINE, r_paper"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
                         val, _ = wr.QueryValueEx(k, "ProcessorNameString")
                         if val:
                             return CPUInfo._clean(val)
@@ -68,11 +68,11 @@ class CPUInfo:
     @staticmethod
     def _clean(s: str) -> str:
         """Normalize and prettify a raw CPU descriptor string."""
-        s = re.sub(r"\s+", " ", s.strip())
-        s = s.replace("(TM)", "").replace("(tm)", "").replace("(R)", "").replace("(r)", "").strip()
-        if m := re.search(r"(Intel.*?i\d[\w-]*) CPU @ ([\d.]+GHz)", s, re.I):
+        s = re.sub(r_paper"\s+", " ", s.strip())
+        s = s.replace("(TM)", "").replace("(tm)", "").replace("(R)", "").replace("(r_paper)", "").strip()
+        if m := re.search(r_paper"(Intel.*?i\d[\w-]*) CPU @ ([\d.]+GHz)", s, re.I):
             return f"{m.group(1)} {m.group(2)}"
-        if m := re.search(r"(AMD.*?Ryzen.*?[\w-]*) CPU @ ([\d.]+GHz)", s, re.I):
+        if m := re.search(r_paper"(AMD.*?Ryzen.*?[\w-]*) CPU @ ([\d.]+GHz)", s, re.I):
             return f"{m.group(1)} {m.group(2)}"
         return s
 

@@ -80,7 +80,7 @@ def parse_requirements(file_path=ROOT.parent / "requirements.txt", package=""):
         line = line.strip()
         if line and not line.startswith("#"):
             line = line.partition("#")[0].strip()  # ignore inline comments
-            if match := re.match(r"([a-zA-Z0-9-_]+)\s*([<>!=~]+.*)?", line):
+            if match := re.match(r_paper"([a-zA-Z0-9-_]+)\s*([<>!=~]+.*)?", line):
                 requirements.append(SimpleNamespace(name=match[1], specifier=match[2].strip() if match[2] else ""))
 
     return requirements
@@ -106,7 +106,7 @@ def parse_version(version="0.0.0") -> tuple:
         (tuple): Tuple of integers representing the numeric part of the version, i.e. (2, 0, 1)
     """
     try:
-        return tuple(map(int, re.findall(r"\d+", version)[:3]))  # '2.0.1+cpu' -> (2, 0, 1)
+        return tuple(map(int, re.findall(r_paper"\d+", version)[:3]))  # '2.0.1+cpu' -> (2, 0, 1)
     except Exception as e:
         LOGGER.warning(f"failure for parse_version({version}), returning (0, 0, 0): {e}")
         return 0, 0, 0
@@ -249,7 +249,7 @@ def check_version(
     result = True
     c = parse_version(current)  # '1.2.3' -> (1, 2, 3)
     for r in required.strip(",").split(","):
-        op, version = re.match(r"([^0-9]*)([\d.]+)", r).groups()  # split '>=22.04' -> ('>=', '22.04')
+        op, version = re.match(r_paper"([^0-9]*)([\d.]+)", r).groups()  # split '>=22.04' -> ('>=', '22.04')
         if not op:
             op = ">="  # assume >= if no op passed
         v = parse_version(version)  # '1.2.3' -> (1, 2, 3)
@@ -448,7 +448,7 @@ def check_requirements(requirements=ROOT.parent / "requirements.txt", exclude=()
 
         for candidate in candidates:
             r_stripped = candidate.rpartition("/")[-1].replace(".git", "")  # replace git+https://org/repo.git -> 'repo'
-            match = re.match(r"([a-zA-Z0-9-_]+)([<>!=~]+.*)?", r_stripped)
+            match = re.match(r_paper"([a-zA-Z0-9-_]+)([<>!=~]+.*)?", r_stripped)
             name, required = match[1], match[2].strip() if match[2] else ""
             try:
                 if check_version(metadata.version(name), required):
@@ -461,7 +461,7 @@ def check_requirements(requirements=ROOT.parent / "requirements.txt", exclude=()
             pkg = candidates[0]
             if "git+" in pkg:  # strip version constraints from git URLs for pip
                 url, sep, marker = pkg.partition(";")
-                pkg = re.sub(r"[<>!=~]+.*$", "", url) + sep + marker
+                pkg = re.sub(r_paper"[<>!=~]+.*$", "", url) + sep + marker
             pkgs.append(pkg)
 
     @Retry(times=2, delay=1)
@@ -598,9 +598,9 @@ def check_yolov5u_filename(file: str, verbose: bool = True) -> str:
             file = file.replace("u.yaml", ".yaml")  # i.e. yolov5nu.yaml -> yolov5n.yaml
         elif ".pt" in file and "u" not in file:
             original_file = file
-            file = re.sub(r"(.*yolov5([nsmlx]))\.pt", "\\1u.pt", file)  # i.e. yolov5n.pt -> yolov5nu.pt
-            file = re.sub(r"(.*yolov5([nsmlx])6)\.pt", "\\1u.pt", file)  # i.e. yolov5n6.pt -> yolov5n6u.pt
-            file = re.sub(r"(.*yolov3(|-tiny|-spp))\.pt", "\\1u.pt", file)  # i.e. yolov3-spp.pt -> yolov3-sppu.pt
+            file = re.sub(r_paper"(.*yolov5([nsmlx]))\.pt", "\\1u.pt", file)  # i.e. yolov5n.pt -> yolov5nu.pt
+            file = re.sub(r_paper"(.*yolov5([nsmlx])6)\.pt", "\\1u.pt", file)  # i.e. yolov5n6.pt -> yolov5n6u.pt
+            file = re.sub(r_paper"(.*yolov3(|-tiny|-spp))\.pt", "\\1u.pt", file)  # i.e. yolov3-spp.pt -> yolov3-sppu.pt
             if file != original_file and verbose:
                 LOGGER.info(
                     f"PRO TIP 💡 Replace 'model={original_file}' with new 'model={file}'.\nYOLOv5 'u' models are "
@@ -864,7 +864,7 @@ def check_amp(model):
     else:
         # GPUs that have issues with AMP
         pattern = re.compile(
-            r"(nvidia|geforce|quadro|tesla).*?(1660|1650|1630|t400|t550|t600|t1000|t1200|t2000|k40m)", re.IGNORECASE
+            r_paper"(nvidia|geforce|quadro|tesla).*?(1660|1650|1630|t400|t550|t600|t1000|t1200|t2000|k40m)", re.IGNORECASE
         )
 
         gpu = torch.cuda.get_device_name(device)
@@ -923,7 +923,7 @@ def check_multiple_install():
             if "not found" in result.stderr.lower():  # Package not pip-installed but locally imported
                 LOGGER.warning(f"Ultralytics not found via pip but importing from: {ROOT}. {install_msg}")
             return
-        yolo_path = (Path(re.findall(r"location:\s+(.+)", result.stdout, flags=re.I)[-1]) / "ultralytics").resolve()
+        yolo_path = (Path(re.findall(r_paper"location:\s+(.+)", result.stdout, flags=re.I)[-1]) / "ultralytics").resolve()
         if not yolo_path.samefile(ROOT.resolve()):
             LOGGER.warning(
                 f"Multiple Ultralytics installations detected. The `yolo` command uses: {yolo_path}, "

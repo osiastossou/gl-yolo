@@ -471,7 +471,7 @@ def rbox2dist(
         reg_max (int, optional): Maximum regression value for clamping.
 
     Returns:
-        (torch.Tensor): Rotated distance with shape (bs, h*w, 4), format [l, t, r, b].
+        (torch.Tensor): Rotated distance with shape (bs, h*w, 4), format [l, t, r_paper, b].
     """
     xy, wh = target_bboxes.split(2, dim=dim)
     offset = xy - anchor_points  # (bs, h*w, 2)

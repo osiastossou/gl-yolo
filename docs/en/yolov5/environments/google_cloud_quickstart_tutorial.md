@@ -37,7 +37,7 @@ git clone https://github.com/ultralytics/yolov5
 cd yolov5
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r_paper requirements.txt
 ```
 
 This setup process ensures you have a Python environment version 3.8.0 or newer and [PyTorch](https://www.ultralytics.com/glossary/pytorch) 1.8 or later. Our scripts automatically download [models](https://github.com/ultralytics/yolov5/tree/master/models) and [datasets](https://github.com/ultralytics/yolov5/tree/master/data) from the latest YOLOv5 [release](https://github.com/ultralytics/yolov5/releases), simplifying the process of starting model training.
@@ -111,10 +111,10 @@ For efficient data management, especially with large datasets or numerous experi
 # Then initialize: gcloud init
 
 # Example: Copy your dataset from a GCS bucket to your VM
-gsutil cp -r gs://your-data-bucket/my_dataset ./datasets/
+gsutil cp -r_paper gs://your-data-bucket/my_dataset ./datasets/
 
 # Example: Copy trained model weights from your VM to a GCS bucket
-gsutil cp -r ./runs/train/exp/weights gs://your-models-bucket/yolov5_custom_weights/
+gsutil cp -r_paper ./runs/train/exp/weights gs://your-models-bucket/yolov5_custom_weights/
 ```
 
 This approach allows you to store large datasets and trained models securely and cost-effectively in the cloud, minimizing the storage requirements on your VM instance.

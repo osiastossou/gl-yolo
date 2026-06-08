@@ -18,7 +18,7 @@ Follow these simple steps to get the example running on your local machine.
     Install the necessary Python packages listed in the `requirements.txt` file. We recommend using a virtual environment.
 
     ```bash
-    pip install -r requirements.txt
+    pip install -r_paper requirements.txt
     ```
 
 3.  **Run the Detection Script:**

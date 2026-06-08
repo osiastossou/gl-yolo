@@ -15,7 +15,7 @@ First, clone the YOLOv5 repository and install the necessary dependencies listed
 ```bash
 git clone https://github.com/ultralytics/yolov5 # clone repository
 cd yolov5
-pip install -r requirements.txt # install dependencies
+pip install -r_paper requirements.txt # install dependencies
 ```
 
 ## How Layer Freezing Works

@@ -23,7 +23,7 @@ from torch.nn.modules.linear import NonDynamicallyQuantizableLinear
 
 
 class MultiheadAttention(nn.Module):
-    r"""Allows the model to jointly attend to information
+    r_paper"""Allows the model to jointly attend to information
     from different representation subspaces.
     See `Attention Is All You Need <https://arxiv.org/abs/1706.03762>`_
 
@@ -136,7 +136,7 @@ class MultiheadAttention(nn.Module):
 
     def forward(self, query: Tensor, key: Tensor, value: Tensor, key_padding_mask: Optional[Tensor] = None,
                 need_weights: bool = True, attn_mask: Optional[Tensor] = None) -> Tuple[Tensor, Optional[Tensor]]:
-        r"""
+        r_paper"""
     Args:
         query, key, value: map a query and a set of key-value pairs to an output.
             See "Attention Is All You Need" for more details.
@@ -240,7 +240,7 @@ def multi_head_attention_forward(
     no_in_projs: bool = False,
     batch_first: bool = False,
 ) -> Tuple[Tensor, Optional[Tensor]]:
-    r"""
+    r_paper"""
     Args:
         query, key, value: map a query and a set of key-value pairs to an output.
             See "Attention Is All You Need" for more details.
@@ -462,7 +462,7 @@ def _in_projection(
     b_k: Optional[Tensor] = None,
     b_v: Optional[Tensor] = None,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    r"""
+    r_paper"""
     Performs the in-projection step of the attention operation. This is simply
     a triple of linear projections, with shape constraints on the weights which
     ensure embedding dimension uniformity in the projected outputs.
@@ -511,7 +511,7 @@ def _in_projection_packed(
     w: Tensor,
     b: Optional[Tensor] = None,
 ) -> List[Tensor]:
-    r"""
+    r_paper"""
     Performs the in-projection step of the attention operation, using packed weights.
     Output is a triple containing projection tensors for query, key and value.
 
@@ -567,7 +567,7 @@ def _scaled_dot_product_attention(
     attn_mask: Optional[Tensor] = None,
     dropout_p: float = 0.0,
 ) -> Tuple[Tensor, Tensor]:
-    r"""
+    r_paper"""
     Computes scaled dot product attention on query, key and value tensors, using
     an optional attention mask if passed, and applying dropout if a probability
     greater than 0.0 is specified.

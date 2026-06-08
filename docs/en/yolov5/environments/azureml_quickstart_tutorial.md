@@ -73,7 +73,7 @@ cd yolov5                                       # Navigate into the directory
 Install the necessary Python packages listed in the `requirements.txt` file. We also install [ONNX](https://www.ultralytics.com/glossary/onnx-open-neural-network-exchange) for model export capabilities.
 
 ```bash
-pip install -r requirements.txt # Install core dependencies
+pip install -r_paper requirements.txt # Install core dependencies
 pip install "onnx>=1.12.0"      # Install ONNX for exporting
 ```
 

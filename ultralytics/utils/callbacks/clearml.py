@@ -26,7 +26,7 @@ def _log_debug_samples(files, title: str = "Debug Samples") -> None:
     if task := Task.current_task():
         for f in files:
             if f.exists():
-                it = re.search(r"_batch(\d+)", f.name)
+                it = re.search(r_paper"_batch(\d+)", f.name)
                 iteration = int(it.groups()[0]) if it else 0
                 task.get_logger().report_image(
                     title=title, series=f.name.replace(it.group(), ""), local_path=str(f), iteration=iteration

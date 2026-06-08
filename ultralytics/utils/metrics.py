@@ -601,7 +601,7 @@ class ConfusionMatrix(DataExportMixin):
         names = list(self.names.values()) if self.task == "classify" else [*list(self.names.values()), "background"]
         clean_names, seen = [], set()
         for name in names:
-            clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+            clean_name = re.sub(r_paper"[^a-zA-Z0-9_]", "_", name)
             original_clean = clean_name
             counter = 1
             while clean_name.lower() in seen:
@@ -777,7 +777,7 @@ def ap_per_class(
         tp (np.ndarray): True positive counts at threshold given by max F1 metric for each class.
         fp (np.ndarray): False positive counts at threshold given by max F1 metric for each class.
         p (np.ndarray): Precision values at threshold given by max F1 metric for each class.
-        r (np.ndarray): Recall values at threshold given by max F1 metric for each class.
+        r_paper (np.ndarray): Recall values at threshold given by max F1 metric for each class.
         f1 (np.ndarray): F1-score values at threshold given by max F1 metric for each class.
         ap (np.ndarray): Average precision for each class at different IoU thresholds.
         unique_classes (np.ndarray): An array of unique classes that have data.
@@ -863,7 +863,7 @@ class Metric(SimpleClass):
         map75: Mean AP at IoU threshold of 0.75 for all classes.
         map: Mean AP at IoU thresholds from 0.5 to 0.95 for all classes.
         mean_results: Mean of results, returns mp, mr, map50, map.
-        class_result: Class-aware result, returns p[i], r[i], ap50[i], ap[i].
+        class_result: Class-aware result, returns p[i], r_paper[i], ap50[i], ap[i].
         maps: mAP of each class.
         fitness: Model fitness as a weighted combination of metrics.
         update: Update metric attributes with new evaluation results.
@@ -948,7 +948,7 @@ class Metric(SimpleClass):
         return [self.mp, self.mr, self.map50, self.map]
 
     def class_result(self, i: int) -> tuple[float, float, float, float]:
-        """Return class-aware result, p[i], r[i], ap50[i], ap[i]."""
+        """Return class-aware result, p[i], r_paper[i], ap50[i], ap[i]."""
         return self.p[i], self.r[i], self.ap50[i], self.ap[i]
 
     @property
@@ -970,7 +970,7 @@ class Metric(SimpleClass):
         Args:
             results (tuple): A tuple containing evaluation metrics:
                 - p (list): Precision for each class.
-                - r (list): Recall for each class.
+                - r_paper (list): Recall for each class.
                 - f1 (list): F1 score for each class.
                 - all_ap (list): AP scores for all classes and all IoU thresholds.
                 - ap_class_index (list): Index of class for each AP score.

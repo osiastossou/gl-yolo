@@ -2850,7 +2850,7 @@ class SAM3VideoSemanticPredictor(SAM3SemanticPredictor):
         # Get reconditioning info from the update plan
         reconditioned_obj_ids = tracker_update_plan.get("reconditioned_obj_ids", set())
 
-        # Step 4: based on `tracker_update_plan`, each GPU executes the update w.r.t. its local SAM2 inference states
+        # Step 4: based on `tracker_update_plan`, each GPU executes the update w.r_paper.t. its local SAM2 inference states
         tracker_states_local_new = self.run_tracker_update_execution_phase(
             frame_idx=frame_idx,
             num_frames=num_frames,

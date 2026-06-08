@@ -23,7 +23,7 @@ git clone https://github.com/ultralytics/ultralytics
 cd ultralytics/examples/YOLOv8-Action-Recognition
 
 # Install dependencies using Python's package manager
-pip install -U -r requirements.txt
+pip install -U -r_paper requirements.txt
 ```
 
 ## 🚀 Step 2: Run Action Recognition Using Ultralytics YOLO11

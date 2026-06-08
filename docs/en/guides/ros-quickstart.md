@@ -411,7 +411,7 @@ def pointcloud2_to_array(pointcloud2: PointCloud2) -> tuple:
     """
     pc_array = ros_numpy.point_cloud2.pointcloud2_to_array(pointcloud2)
     split = ros_numpy.point_cloud2.split_rgb_field(pc_array)
-    rgb = np.stack([split["b"], split["g"], split["r"]], axis=2)
+    rgb = np.stack([split["b"], split["g"], split["r_paper"]], axis=2)
     xyz = ros_numpy.point_cloud2.get_xyz_points(pc_array, remove_nans=False)
     xyz = np.array(xyz).reshape((pointcloud2.height, pointcloud2.width, 3))
     nan_rows = np.isnan(xyz).all(axis=2)
@@ -598,7 +598,7 @@ segmentation_model = YOLO("yolo26m-seg.pt")
 def pointcloud2_to_array(pointcloud2):
     pc_array = ros_numpy.point_cloud2.pointcloud2_to_array(pointcloud2)
     split = ros_numpy.point_cloud2.split_rgb_field(pc_array)
-    rgb = np.stack([split["b"], split["g"], split["r"]], axis=2)
+    rgb = np.stack([split["b"], split["g"], split["r_paper"]], axis=2)
     xyz = ros_numpy.point_cloud2.get_xyz_points(pc_array, remove_nans=False)
     xyz = np.array(xyz).reshape((pointcloud2.height, pointcloud2.width, 3))
     return xyz, rgb

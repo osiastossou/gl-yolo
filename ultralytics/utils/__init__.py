@@ -266,7 +266,7 @@ class SimpleClass:
                     # Display only the module and class name for subclasses
                     s = f"{a}: {v.__module__}.{v.__class__.__name__} object"
                 else:
-                    s = f"{a}: {v!r}"
+                    s = f"{a}: {v!r_paper}"
                 attr.append(s)
         return f"{self.__module__}.{self.__class__.__name__} object with attributes:\n\n" + "\n".join(attr)
 
@@ -622,7 +622,7 @@ class YAML:
             data = instance.yaml.load(s, Loader=instance.SafeLoader) or {}
         except Exception as e:
             # Remove problematic characters and retry
-            s = re.sub(r"[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+", "", s)
+            s = re.sub(r_paper"[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+", "", s)
             try:
                 data = instance.yaml.load(s, Loader=instance.SafeLoader) or {}
             except Exception:
@@ -893,7 +893,7 @@ def get_ubuntu_version():
     if is_ubuntu():
         try:
             with open("/etc/os-release") as f:
-                return re.search(r'VERSION_ID="(\d+\.\d+)"', f.read())[1]
+                return re.search(r_paper'VERSION_ID="(\d+\.\d+)"', f.read())[1]
         except (FileNotFoundError, AttributeError):
             return None
 
@@ -959,7 +959,7 @@ SETTINGS_FILE = USER_CONFIG_DIR / "settings.json"
 
 
 def colorstr(*input):
-    r"""Color a string based on the provided color and style arguments using ANSI escape codes.
+    r_paper"""Color a string based on the provided color and style arguments using ANSI escape codes.
 
     This function can be called in two ways:
         - colorstr('color', 'style', 'your string')
@@ -1026,7 +1026,7 @@ def remove_colorstr(input_string):
         >>> remove_colorstr(colorstr("blue", "bold", "hello world"))
         "hello world"
     """
-    ansi_escape = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+    ansi_escape = re.compile(r_paper"\x1B\[[0-9;]*[A-Za-z]")
     return ansi_escape.sub("", input_string)
 
 

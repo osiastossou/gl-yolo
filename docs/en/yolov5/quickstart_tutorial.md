@@ -15,7 +15,7 @@ Prepare for launch by cloning the [YOLOv5 repository](https://github.com/ultraly
 ```bash
 git clone https://github.com/ultralytics/yolov5 # clone repository
 cd yolov5
-pip install -r requirements.txt # install dependencies
+pip install -r_paper requirements.txt # install dependencies
 ```
 
 ## Inference with PyTorch Hub

@@ -241,7 +241,7 @@ FastSAM is also available directly from the [https://github.com/CASIA-IVA-Lab/Fa
 
     ```bash
     cd FastSAM
-    pip install -r requirements.txt
+    pip install -r_paper requirements.txt
     ```
 
 4. Install the CLIP model:

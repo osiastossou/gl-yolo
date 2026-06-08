@@ -64,7 +64,7 @@ git clone https://github.com/ultralytics/yolov5
 cd yolov5
 
 # Install required packages
-pip install -r requirements.txt
+pip install -r_paper requirements.txt
 ```
 
 With the environment ready, you can start using YOLOv5 for various tasks:

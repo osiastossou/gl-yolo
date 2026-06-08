@@ -61,10 +61,10 @@ sources or long-running streams and videos. See https://docs.ultralytics.com/mod
 
 Example:
     results = model(source=..., stream=True)  # generator of Results objects
-    for r in results:
-        boxes = r.boxes  # Boxes object for bbox outputs
-        masks = r.masks  # Masks object for segment masks outputs
-        probs = r.probs  # Class probabilities for classification outputs
+    for r_paper in results:
+        boxes = r_paper.boxes  # Boxes object for bbox outputs
+        masks = r_paper.masks  # Masks object for segment masks outputs
+        probs = r_paper.probs  # Class probabilities for classification outputs
 """
 
 
@@ -433,7 +433,7 @@ class BasePredictor:
             string += f"{i}: "
             frame = self.dataset.count
         else:
-            match = re.search(r"frame (\d+)/", s[i])
+            match = re.search(r_paper"frame (\d+)/", s[i])
             frame = int(match[1]) if match else None  # 0 if frame undetermined
 
         self.txt_path = self.save_dir / "labels" / (p.stem + ("" if self.dataset.mode == "image" else f"_{frame}"))

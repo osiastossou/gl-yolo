@@ -58,7 +58,7 @@ Install the required dependencies:
 
 ```bash
 cd ultralytics
-pip install -r requirements.txt
+pip install -r_paper requirements.txt
 pip install ultralytics
 pip install onnx
 ```
@@ -107,7 +107,7 @@ Then open a notebook cell and install the required dependencies:
 %%bash
 source activate yolo26env
 cd ultralytics
-pip install -r requirements.txt
+pip install -r_paper requirements.txt
 pip install ultralytics
 pip install onnx
 ```

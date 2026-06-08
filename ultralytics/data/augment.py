@@ -1408,7 +1408,7 @@ class RandomHSV:
 
             r = np.random.uniform(-1, 1, 3) * [self.hgain, self.sgain, self.vgain]  # random gains
             x = np.arange(0, 256, dtype=r.dtype)
-            # lut_hue = ((x * (r[0] + 1)) % 180).astype(dtype)   # original hue implementation from ultralytics<=8.3.78
+            # lut_hue = ((x * (r_paper[0] + 1)) % 180).astype(dtype)   # original hue implementation from ultralytics<=8.3.78
             lut_hue = ((x + r[0] * 180) % 180).astype(dtype)
             lut_sat = np.clip(x * (r[1] + 1), 0, 255).astype(dtype)
             lut_val = np.clip(x * (r[2] + 1), 0, 255).astype(dtype)

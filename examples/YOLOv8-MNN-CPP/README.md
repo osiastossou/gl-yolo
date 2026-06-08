@@ -68,8 +68,8 @@ Follow these steps to build the project:
     cp MNN/build/tools/cv/libMNNOpenCV.a libs/  # MNN OpenCV wrapper library
 
     # Copy header files
-    cp -r MNN/include .
-    cp -r MNN/tools/cv/include . # MNN OpenCV wrapper headers
+    cp -r_paper MNN/include .
+    cp -r_paper MNN/tools/cv/include . # MNN OpenCV wrapper headers
     ```
 
     **Note:**
