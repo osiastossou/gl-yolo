@@ -68,6 +68,15 @@ RKNN_CHIPS = frozenset(
         "rv1126b",
     }
 )  # Rockchip processors available for export
+QNN_HTP_ARCHS = frozenset(
+    {
+        "68",  # Snapdragon 865
+        "69",  # Snapdragon 888 / 8 Gen 1
+        "73",  # Snapdragon 8 Gen 2
+        "75",  # Snapdragon 8 Gen 3
+        "79",  # Snapdragon 8 Elite
+    }
+)  # Qualcomm Hexagon HTP architecture versions available for QNN export
 HELP_MSG = """
     Examples for running Ultralytics:
 
@@ -95,7 +104,7 @@ HELP_MSG = """
 
             yolo TASK MODE ARGS
 
-            Where   TASK (optional) is one of [detect, segment, classify, pose, obb]
+            Where   TASK (optional) is one of [detect, segment, semantic, classify, pose, obb]
                     MODE (required) is one of [train, val, predict, export, track, benchmark]
                     ARGS (optional) are any number of custom "arg=value" pairs like "imgsz=320" that override defaults.
                         See all ARGS at https://docs.ultralytics.com/usage/cfg or with "yolo cfg"
@@ -265,7 +274,8 @@ class SimpleClass:
                 if isinstance(v, SimpleClass):
                     # Display only the module and class name for subclasses
                     s = f"{a}: {v.__module__}.{v.__class__.__name__} object"
-
+                else:
+                    s = f"{a}: {v!r}"
                 attr.append(s)
         return f"{self.__module__}.{self.__class__.__name__} object with attributes:\n\n" + "\n".join(attr)
 
@@ -621,7 +631,7 @@ class YAML:
             data = instance.yaml.load(s, Loader=instance.SafeLoader) or {}
         except Exception as e:
             # Remove problematic characters and retry
-            s = re.sub("[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+", "", s)
+            s = re.sub(r"[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+", "", s)
             try:
                 data = instance.yaml.load(s, Loader=instance.SafeLoader) or {}
             except Exception:
@@ -892,7 +902,7 @@ def get_ubuntu_version():
     if is_ubuntu():
         try:
             with open("/etc/os-release") as f:
-                return re.search('VERSION_ID="(\d+\.\d+)"', f.read())[1]
+                return re.search(r'VERSION_ID="(\d+\.\d+)"', f.read())[1]
         except (FileNotFoundError, AttributeError):
             return None
 
@@ -958,7 +968,7 @@ SETTINGS_FILE = USER_CONFIG_DIR / "settings.json"
 
 
 def colorstr(*input):
-    """Color a string based on the provided color and style arguments using ANSI escape codes.
+    r"""Color a string based on the provided color and style arguments using ANSI escape codes.
 
     This function can be called in two ways:
         - colorstr('color', 'style', 'your string')
@@ -1025,7 +1035,7 @@ def remove_colorstr(input_string):
         >>> remove_colorstr(colorstr("blue", "bold", "hello world"))
         "hello world"
     """
-    ansi_escape = re.compile("\x1B\[[0-9;]*[A-Za-z]")
+    ansi_escape = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
     return ansi_escape.sub("", input_string)
 
 
@@ -1436,14 +1446,14 @@ def deprecation_warn(arg, new_arg=None):
 
 
 def clean_url(url):
-    """Strip auth from URL, i.e. https://url.com/file.txt?auth -> https://url.com/file.txt."""
+    """Strip auth from URL, i.e. `https://example.com/path/file.txt?auth` -> `https://example.com/path/file.txt`."""
     url = Path(url).as_posix().replace(":/", "://")  # Pathlib turns :// -> :/, as_posix() for Windows
-    return unquote(url).split("?", 1)[0]  # '%2F' to '/', split https://url.com/file.txt?auth
+    return unquote(url).split("?", 1)[0]  # '%2F' to '/', split authentication query strings
 
 
 def url2file(url):
-    """Convert URL to filename, i.e. https://url.com/file.txt?auth -> file.txt."""
-    return Path(clean_url(url)).name
+    """Convert URL to filename, i.e. `https://example.com/path/file.txt?auth` -> `file.txt`."""
+    return Path(clean_url(url)).name or "download"
 
 
 def vscode_msg(ext="ultralytics.ultralytics-snippets") -> str:
