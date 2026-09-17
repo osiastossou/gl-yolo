@@ -80,7 +80,8 @@ from ultralytics.nn.modules import (
     GL_CAB,
     C2f_GLCAB,
     SPDConv, AdaptA2C2f,GL_CAB_DW,TOSA, AvgPoolDWConv,
-    SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
+    SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
+    C3k2_MSD, PSWCA, IAFM
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, WINDOWS, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1621,7 +1622,8 @@ def parse_model(d, ch, verbose=True):
             GL_CAB,
             C2f_GLCAB,
             SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
+            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
+            C3k2_MSD, PSWCA
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1645,7 +1647,8 @@ def parse_model(d, ch, verbose=True):
             GL_CAB,
             C2f_GLCAB,
             SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv
+            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
+            C3k2_MSD
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
@@ -1697,6 +1700,10 @@ def parse_model(d, ch, verbose=True):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
+        elif m is IAFM:
+            c1, c2_skip = ch[f[0]], ch[f[1]]
+            args = [c1, c2_skip]
+            c2 = c1
         elif m in frozenset(
             {
                 Detect,

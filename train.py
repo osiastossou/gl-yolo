@@ -65,9 +65,10 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     # name=outname, # Nom de l'expérience
     # )
 
-    print('GPU - Memory')
-    print(torch.cuda.get_device_name(0))
-    print(torch.cuda.get_device_properties(0).total_memory / 1024 ** 3)
+    print(f'Device: {device}')
+    if torch.cuda.is_available():
+        print(torch.cuda.get_device_name(0))
+        print(torch.cuda.get_device_properties(0).total_memory / 1024 ** 3)
 
     results = model.train(
         data=data,
