@@ -23,7 +23,7 @@ def get_device():
 device = get_device()
 
 
-def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=True):
+def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=False):
     """
     Fonction principale pour entraîner le modèle YOLOv11 customisé.
     """
@@ -119,6 +119,7 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=True)
         workers=2,
 
         name=outname,
+        resume=resume,
     )
 
     print("Entraînement terminé.")
@@ -144,11 +145,12 @@ if __name__ == '__main__':
     parser.add_argument('-imgsz', type=int, default=640, help="Image size for training (default: 640)")
     parser.add_argument('-v', type=int, default=11, help="Version yolo (default: 11)")
     parser.add_argument('-p', type=bool, default=True, help="Load pretrained model (default: True)")
+    parser.add_argument('-resume', type=bool, default=False, help="Resume training from last checkpoint (default: True)")
 
     args = parser.parse_args()
 
     # Appel de main avec les arguments
-    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p)
+    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume)
 
     # python main.py -model 'Yolo11CBAM/yolov11n-cbam.yaml' -data '/Users/osias/Documents/PHD/CODE/birds_data/data.yaml' -outname 'outname' -epochs 100
 
