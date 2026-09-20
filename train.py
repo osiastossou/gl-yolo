@@ -119,8 +119,8 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=False
         #accumulate=4,
         workers=2,
 
-        name=outname,
-        project=outname
+        name=outname.split('/')[-1],  # Nom de l'expérience basé sur le nom du dossier
+        project=outname.replace('/' + outname.split('/')[-1], ''),  # Projet basé sur le premier dossier du chemin
     )
 
     print("Entraînement terminé.")
