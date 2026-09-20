@@ -41,7 +41,8 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=False
 
     if resume:
         print("Reprise de l'entraînement à partir du dernier checkpoint.")
-        model = model.load(f"{outname}/weights/last.pt")
+        #model = model.load(f"{outname}/weights/last.pt")
+        model = YOLO(f"{outname}/weights/last.pt")
 
     else:
         print("Nouvel entraînement à partir du modèle de base.")
