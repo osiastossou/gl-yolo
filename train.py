@@ -119,6 +119,7 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=False
         workers=2,
 
         name=outname,
+        project=outname
     )
 
     print("Entraînement terminé.")
