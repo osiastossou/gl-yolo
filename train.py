@@ -23,7 +23,7 @@ def get_device():
 device = get_device()
 
 
-def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
+def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=True):
     """
     Fonction principale pour entraîner le modèle YOLOv11 customisé.
     """
@@ -39,11 +39,18 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True):
     model = YOLO(modelpath)
     print("Modèle de base chargé.")
 
-    if p == True:
-        if v == 11:
-            model = model.load("yolo11n.pt")
-        elif v == 12:
-            model = model.load("yolo12n.pt")
+    if resume:
+        print("Reprise de l'entraînement à partir du dernier checkpoint.")
+        model = model.load(f"{outname}/weights/last.pt")
+
+    else:
+        print("Nouvel entraînement à partir du modèle de base.")
+
+        if p == True:
+            if v == 11:
+                model = model.load("yolo11n.pt")
+            elif v == 12:
+                model = model.load("yolo12n.pt")
 
     # --- 2. ENTRAÎNEMENT AVEC CONFIGURATION CUSTOMISÉE ---
     # On lance l'entraînement en passant notre architecture customisée
