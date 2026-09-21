@@ -115,6 +115,7 @@ from .pwc_conv import PWCConv
 from .pooling import LearnableLPPool2d
 from .tosa import TOSA, AvgPoolDWConv
 from .ccp import C3k2_MSD, PSWCA, IAFM
+from .gl_cab_ccp import GL_PSWCA
 
 __all__ = (
     "AIFI",
@@ -207,5 +208,5 @@ __all__ = (
     "S2DResConv",
     "LearnableLPPool2d","GL_CAB_DW",
     "SimAM", "BottleneckSimAM", "C3kSimAM", "FlexSimAM", "CARAFEFast","SACConv","GL_CAB_PSA","PWCConv",
-    "C3k2_MSD", "PSWCA", "IAFM"
+    "C3k2_MSD", "PSWCA", "IAFM","GL_PSWCA"
 )
