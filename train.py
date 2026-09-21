@@ -78,6 +78,11 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, p=True, resume=False
         print(torch.cuda.get_device_name(0))
         print(torch.cuda.get_device_properties(0).total_memory / 1024 ** 3)
 
+    # 2. Mettre à jour les paramètres enregistrés dans le modèle
+    model.args['project'] = '/content/drive/MyDrive/PHD_YOLO12'
+    model.args['name'] = 'Y11CCP-VD'
+    model.args['save_dir'] = '/content/drive/MyDrive/PHD_YOLO12/Y11CCP-VD'
+
     results = model.train(
         data=data,
         epochs=epochs,
