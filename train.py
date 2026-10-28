@@ -62,9 +62,13 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, res
         print(torch.cuda.get_device_name(0))
         print(f"{torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.1f} GB VRAM")
 
-    # `outname` encode project/name, ex: "runs/yolo11-gl-ccp" -> project="runs", name="yolo11-gl-ccp".
+    # `outname` encodes project/name, ex: "runs/yolo11-gl-ccp" -> project="runs", name="yolo11-gl-ccp".
+    # `project` must be absolute: Ultralytics resolves a *relative* project against its own
+    # global `runs_dir` setting (~/Library/Application Support/Ultralytics/settings.json),
+    # not against this script's directory -- which silently sends everything to a stale path
+    # if that global setting still points at an old clone/location of this repo.
     name = os.path.basename(outname)
-    project = os.path.dirname(outname)
+    project = os.path.abspath(os.path.dirname(outname) or ".")
 
     print(f"Début de l'entraînement ({epochs} epochs, imgsz={imgsz})...")
     results = model.train(
