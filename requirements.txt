@@ -40,3 +40,12 @@ torchvision==0.23.0
 triton==3.4.0
 typing_extensions==4.16.0
 zipp==3.23.1
+
+# Dépendances déclarées obligatoires par pyproject.toml, absentes du snapshot
+# ci-dessus. requests et polars font planter train.py au premier run
+# (téléchargement des poids pré-entraînés / sauvegarde de checkpoint).
+polars>=0.20.0
+psutil>=5.8.0
+requests>=2.23.0
+scipy>=1.4.1
+ultralytics-thop>=2.0.18
