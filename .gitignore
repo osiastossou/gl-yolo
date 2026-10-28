@@ -204,3 +204,10 @@ calibration_*.npy
 # Training logs
 args.yaml
 results.csv
+
+# LaTeX build artifacts (paper/)
+*.aux
+*.out
+*.bbl
+*.blg
+*.synctex.gz

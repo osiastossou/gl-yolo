@@ -1,0 +1,482 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{algorithmic}
+\usepackage{textcomp}
+\usepackage{url}
+\usepackage{hyperref}
+
+% Visible marker for placeholder content that must be filled in once
+% full-length training runs (200 epochs, DOTAv1.5 + VisDrone) have completed.
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+\begin{document}
+
+\title{Combining Multi-Scale Context Aggregation, Attention-Guided Upsampling,\\
+and High-Resolution Feature Enhancement for Small Object Detection with YOLO}
+
+\author{
+\IEEEauthorblockN{Osias No\"{e}l Tossou}
+\IEEEauthorblockA{\todo{Affiliation / Department / University}\\
+\todo{City, Country}\\
+osias.tossou@gmail.com}
+}
+
+\maketitle
+
+\begin{abstract}
+Small object detection remains one of the hardest open problems for single-stage
+detectors such as the YOLO family, because repeated stride-2 downsampling
+in the backbone erodes the spatial signal of small instances well before the
+detection heads can exploit it. In this work we study three complementary
+architectural interventions on YOLO11/YOLO12: (i) an attention-augmented,
+cross-stage-partial variant of the Spatial Pyramid Pooling -- Fast (SPPF)
+block at the lowest-resolution stage (P5), combining a dilated multi-branch
+context path with Convolutional Block Attention Module (CBAM) refinement;
+(ii) a high-resolution early-stage branch that inserts lightweight attention
+modules at the P2/P3 stages and adds a dedicated P2 detection head, so that
+small-object evidence is exploited before it is downsampled away; and (iii)
+content-aware feature reassembly (CARAFE) in place of nearest-neighbor
+upsampling in the top-down feature pyramid, so that the detail reconstructed
+during top-down fusion is learned rather than interpolated. We evaluate each
+intervention in isolation and in combination against YOLO11, YOLO12, and a
+non-attention SPPF replacement, on two aerial/UAV small-object benchmarks,
+DOTA v1.5 and VisDrone. \todo{One-sentence quantitative summary of the main
+result, e.g. "Our combined architecture improves mAP50-95 on small-object
+classes by X.X points over the YOLO11 baseline while adding Y.YM parameters."}
+\end{abstract}
+
+\begin{IEEEkeywords}
+small object detection, YOLO, spatial pyramid pooling, attention mechanism, feature pyramid network, aerial imagery, UAV imagery
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+
+Single-stage detectors of the YOLO family~\cite{redmon2016yolo} have become the
+default choice for real-time object detection because they offer a favorable
+accuracy/latency trade-off. However, their performance on \emph{small}
+objects --- a few pixels wide after the backbone's successive stride-2
+downsampling stages --- lags substantially behind their performance on
+medium and large instances. This gap is particularly acute in aerial and
+UAV imagery, where the camera's bird's-eye viewpoint and high altitude make
+most instances of interest (vehicles, boats, pedestrians) occupy only a
+handful of pixels, and where datasets such as DOTA~\cite{xia2018dota} and
+VisDrone~\cite{zhu2021visdrone} report that the majority of annotated
+instances fall under commonly used small-object area thresholds.
+
+The root cause is architectural: by the time a feature map reaches the
+detector's deepest stage (P5, stride 32), a small object's spatial footprint
+has often collapsed to a single feature-map cell or less, and the
+information is further diluted by whatever aggregation happens at that
+stage --- in YOLO11/YOLO12, the Spatial Pyramid Pooling -- Fast
+(SPPF)~\cite{he2015spp} block, a cascade of same-kernel max-pooling
+operations. SPPF enlarges the effective receptive field cheaply, but it
+does so purely through max-pooling, which discards the fine-grained detail
+a small object needs and treats every channel and spatial location
+identically.
+
+We argue --- and structure our ablation study around the claim --- that no
+single intervention at a single stage of the network is sufficient: a
+richer SPPF replacement at P5 only reshapes the \emph{global context} that
+is later fused back into higher-resolution stages through the feature
+pyramid; it cannot recover detail already destroyed by downsampling.
+Conversely, an early-stage, high-resolution intervention that preserves
+small-object detail has no mechanism to inject the broader scene context
+that disambiguates visually similar small classes. We therefore propose
+and evaluate three interventions that act at three different points of the
+network, and measure whether their effects are complementary rather than
+redundant:
+
+\begin{itemize}
+  \item \textbf{SPPFCSPC-CBAM} (Section~\ref{sec:method-sppf}): a
+  cross-stage-partial, attention-refined replacement for SPPF at P5,
+  combining a CSP shortcut branch, a dilated multi-branch pooling cascade,
+  and CBAM~\cite{woo2018cbam} channel/spatial attention.
+  \item \textbf{TOSA + P2 head} (Section~\ref{sec:method-tosa}): lightweight
+  attention modules inserted at the P2 and P3 stages of the backbone, a
+  soft (average-pooling-based) downsampling operator in place of strided
+  convolutions between P2 and P4, and an additional detection head at
+  stride 4 (P2), so that small-object evidence is used directly rather than
+  only through a downsampled proxy.
+  \item \textbf{CARAFE upsampling} (Section~\ref{sec:method-carafe}): a
+  content-aware reassembly operator~\cite{wang2019carafe} that replaces
+  nearest-neighbor upsampling in the top-down feature pyramid path, so that
+  the detail injected during top-down fusion is predicted from local
+  content rather than interpolated.
+\end{itemize}
+
+Our contributions are:
+\begin{enumerate}
+  \item A systematic, controlled ablation of SPPF replacements for small
+  object detection, isolating the respective contributions of multi-branch
+  dilated context, CSP structure, and channel/spatial attention.
+  \item A combined architecture that integrates P5 context aggregation,
+  P2/P3 high-resolution attention, and content-aware FPN upsampling into a
+  single YOLO11-based model, evaluated end-to-end against each component in
+  isolation.
+  \item An empirical comparison on two aerial/UAV benchmarks (DOTA v1.5,
+  VisDrone) against YOLO11, YOLO12, and a non-attention SPPF replacement
+  baseline. \todo{Confirm final experimental scope once all runs complete.}
+\end{enumerate}
+
+\section{Related Work}
+\label{sec:related}
+
+\subsection{YOLO and Spatial Pyramid Pooling}
+The YOLO family~\cite{redmon2016yolo} evolved from YOLOv1's single dense
+prediction grid to multi-scale feature pyramids with a Spatial Pyramid
+Pooling (SPP) stage~\cite{he2015spp} at the backbone's deepest level, which
+YOLOv5 replaced with the cheaper, functionally equivalent SPPF (a single
+pooling kernel applied repeatedly instead of three parallel kernels of
+increasing size). YOLOv7 proposed SPPCSPC~\cite{wang2023yolov7}, which adds
+a cross-stage-partial shortcut around the pooling cascade, reducing the
+information bottleneck a plain SPP/SPPF introduces; our SPPFCSPC-CBAM
+module (Section~\ref{sec:method-sppf}) extends this line of work with
+explicit multi-scale dilation and attention-based refinement.
+
+\subsection{Multi-scale context and receptive field diversity}
+Beyond SPP-style pooling, atrous/dilated convolutions have been used to
+enlarge the receptive field while preserving spatial resolution, notably in
+ASPP~\cite{chen2017deeplab} for semantic segmentation and RFBNet's
+Receptive Field Block~\cite{liu2018rfb} for object detection, which fuses
+parallel dilated branches explicitly to diversify the effective receptive
+field rather than relying solely on pooling. Our SPPFCSPC-CBAM module
+borrows this multi-dilation-branch principle while retaining the
+cheap cascaded-pooling branch of SPPF for a controlled comparison.
+
+\subsection{Attention mechanisms}
+Channel and spatial attention modules have been shown to cheaply improve
+feature discriminability without significantly increasing model size. CBAM
+~\cite{woo2018cbam} sequentially applies channel and spatial attention;
+SimAM~\cite{yang2021simam} achieves a comparable effect with a
+parameter-free energy-based formulation. We use CBAM inside our SPPF
+replacement and note SimAM as a lighter-weight alternative evaluated as a
+secondary module in our codebase but outside the scope of the present
+ablation.
+
+\subsection{Small object detection}
+Dedicated small-object detection work generally falls into two families:
+architectural interventions that preserve or restore high-resolution
+detail (additional high-resolution detection heads, e.g. a P2/stride-4
+head as used by several YOLO variants and by QueryDet-style
+cascades; and feature pyramid upsampling improvements such as
+CARAFE~\cite{wang2019carafe}, which predicts content-aware reassembly
+kernels instead of using fixed nearest-neighbor or bilinear interpolation
+in the top-down path) and data/training interventions (tiled inference
+such as SAHI, copy-paste augmentation of small instances, and loss
+functions less sensitive to small-box IoU volatility such as
+Wise-IoU/SIoU variants). The present work focuses on the architectural
+family, and treats the P2-head and CARAFE directions as complementary,
+testing them jointly with our SPPF-stage contribution rather than in
+isolation.
+
+\subsection{Aerial and UAV object detection benchmarks}
+DOTA~\cite{xia2018dota} and VisDrone~\cite{zhu2021visdrone} are the two
+benchmarks used in this study. Both are dominated by small, dense
+instances captured from an aerial or near-aerial viewpoint (vehicles,
+ships, pedestrians), which makes them a natural testbed for small-object
+architectural interventions, as opposed to ground-level benchmarks such as
+COCO where the small-object subset is a much smaller fraction of the data.
+
+\section{Proposed Method}
+\label{sec:method}
+
+\begin{figure}[htbp]
+\centering
+\fbox{\parbox{0.9\linewidth}{\centering\vspace{3.2cm}
+\todo{Insert block diagram of the combined architecture: backbone with
+TOSA/P2 head (Sec.~\ref{sec:method-tosa}), SPPFCSPC-CBAM at P5
+(Sec.~\ref{sec:method-sppf}), and CARAFE upsampling in the FPN
+(Sec.~\ref{sec:method-carafe}).}
+\vspace{3.2cm}}}
+\caption{Overview of the proposed architecture.}
+\label{fig:architecture}
+\end{figure}
+
+All variants studied in this paper share the YOLO11 backbone/head topology
+(Fig.~\ref{fig:architecture}), and differ
+only in the modules described below, which can be composed independently.
+This lets us attribute any accuracy change to a specific, isolated
+architectural change rather than to a confound of several simultaneous
+modifications.
+
+\subsection{Baseline}
+The YOLO11 baseline backbone downsamples the input through five stages
+(P1--P5, strides 2--32) using strided $3\times3$ convolutions and C3k2
+blocks, aggregates context at P5 with SPPF, refines it with a C2PSA
+attention block, and feeds a standard PANet-style feature pyramid (nearest-
+neighbor upsampling, concatenation, C3k2 fusion) into three detection heads
+at P3/P4/P5. YOLO12 is evaluated as a second, independent baseline.
+
+\subsection{SPPFCSPC-CBAM: attention-refined SPPF replacement}
+\label{sec:method-sppf}
+
+Plain SPPF aggregates context purely through a cascade of same-kernel
+max-pooling operations, which (i) discards fine-grained detail at every
+pooling step and (ii) treats all channels and spatial locations uniformly.
+Our replacement, SPPFCSPC-CBAM, addresses both limitations while keeping
+the parameter/FLOP overhead at P5 --- the network's lowest-resolution,
+cheapest-to-widen stage --- deliberately contained.
+
+Given an input feature map $X \in \mathbb{R}^{C \times H \times W}$, the
+module splits computation into a cross-stage-partial shortcut branch and a
+pooling branch (Eq.~\ref{eq:sppfcspc-split}):
+\begin{align}
+\label{eq:sppfcspc-split}
+X_1 &= \mathrm{Conv}_{1\times1}(X), \quad X_2 = \mathrm{Conv}_{1\times1}(X) \\
+X_1' &= \mathrm{Conv}_{1\times1}(\mathrm{Conv}_{3\times3}(X_1))
+\end{align}
+where $X_2$ bypasses pooling entirely and is fused back in at the end. The
+pooled branch applies a $k\times k$ max-pool $n$ times in sequence (as in
+SPPF, equivalent to a single pass of $k, 2k, \dots$ receptive fields at a
+fraction of the cost of parallel kernels):
+\begin{equation}
+Y_0 = X_1', \quad Y_i = \mathrm{MaxPool}_{k}(Y_{i-1}), \; i = 1, \dots, n
+\end{equation}
+The $n+1$ pooled feature maps are concatenated, fused, and refined with
+CBAM channel-then-spatial attention~\cite{woo2018cbam} before being
+concatenated with the untouched shortcut branch and projected to the
+output channel count:
+\begin{align}
+Y &= \mathrm{CBAM}\big(\mathrm{Conv}_{3\times3}(\mathrm{Conv}_{1\times1}([Y_0, \dots, Y_n]))\big) \\
+\mathrm{Out} &= \mathrm{Conv}_{1\times1}([Y, X_2])
+\end{align}
+The CSP shortcut ($X_2$) guarantees that at least one path through the
+module carries the input forward with no lossy pooling, and CBAM
+re-weights the pooled branch by learned channel and spatial relevance
+rather than taking the pooling cascade's output at face value.
+
+\subsection{TOSA and the P2 detection head}
+\label{sec:method-tosa}
+
+SPPFCSPC-CBAM operates at P5 (stride 32) and therefore cannot recover
+detail already lost to downsampling; it only improves the quality of the
+context subsequently fused back into higher-resolution stages. To act
+\emph{before} that detail is lost, we insert a lightweight attention
+module (TOSA) directly after the P2 (stride 4) and P3 (stride 8) stages of
+the backbone, replace the strided $3\times3$ convolutions that downsample
+P2$\to$P3 and P3$\to$P4 with a channel-preserving average-pooling depthwise
+convolution (so that width scaling propagates through the backbone
+unchanged), and add a fourth detection head at P2/stride 4 ($160\times160$
+at a $640\times640$ input), alongside the standard P3/P4/P5 heads. The P2
+head lets the detector directly supervise and predict from the
+highest-resolution feature map the network produces, rather than relying
+exclusively on heads that only see small objects after at least one more
+round of downsampling than P2 itself.
+
+\subsection{Content-aware upsampling (CARAFE)}
+\label{sec:method-carafe}
+
+The top-down path of a standard YOLO feature pyramid upsamples
+low-resolution, high-level features with fixed nearest-neighbor
+interpolation before fusing them with the corresponding higher-resolution
+backbone feature map. This interpolation is content-agnostic: it cannot
+reconstruct any detail beyond what the low-resolution map already encodes
+explicitly. We replace nearest-neighbor upsampling with
+CARAFE~\cite{wang2019carafe}, which predicts, from the local content of the
+low-resolution feature map, a reassembly kernel used to redistribute each
+output pixel's value from a local neighborhood of input pixels, instead of
+simply repeating the nearest input value. This is channel-preserving and
+computationally lightweight (a small encoder plus an unfold-based weighted
+sum) relative to the convolutional blocks that already dominate the
+pyramid's cost.
+
+\subsection{Combined architecture}
+\label{sec:method-combined}
+
+Our proposed architecture (denoted COMBO in Section~\ref{sec:results})
+applies all three interventions jointly on top of the YOLO11 topology: TOSA
+and the P2 head at the backbone's high-resolution stages, SPPFCSPC-CBAM at
+P5, and CARAFE throughout the top-down FPN path. Because each intervention
+acts at a different point of the network and is independently toggleable
+in our implementation, Section~\ref{sec:results} reports both the combined
+model and each component in isolation, which lets us test directly whether
+their effects are additive, redundant, or interacting.
+
+\section{Experimental Setup}
+\label{sec:experiments}
+
+\subsection{Datasets}
+We evaluate on two aerial/UAV object detection benchmarks dominated by
+small, dense instances:
+\begin{itemize}
+  \item \textbf{DOTA v1.5}~\cite{xia2018dota}: 1,411 training and 458
+  validation images (the official \texttt{test} split, 937 images, has no
+  public ground truth and is excluded from this study), 16 categories,
+  annotated with oriented bounding boxes, converted to axis-aligned boxes
+  for the detection task studied here.
+  \item \textbf{VisDrone}~\cite{zhu2021visdrone}: drone-captured imagery
+  across 10 object categories (pedestrian, vehicle, bicycle, etc.),
+  characterized by dense small-object scenes with substantial occlusion.
+\end{itemize}
+
+\subsection{Models compared}
+\begin{itemize}
+  \item \textbf{YOLO11} / \textbf{YOLO12}: unmodified baselines.
+  \item \textbf{GL}: SPPF replaced by a non-attention GL-CAB block at P5
+  only, isolating the effect of the architectural change itself from
+  attention.
+  \item \textbf{GLCCP} / \textbf{CCP}: two further SPPF-slot variants built
+  on progressive dilated context aggregation (GL-PSWCA).
+  \item \textbf{SCC}: our SPPFCSPC-CBAM module (Section~\ref{sec:method-sppf})
+  in isolation, all other stages unchanged from YOLO11.
+  \item \textbf{T}: TOSA + P2 head (Section~\ref{sec:method-tosa}) in
+  isolation, SPPF unchanged.
+  \item \textbf{COMBO}: our full proposed architecture
+  (Section~\ref{sec:method-combined}).
+\end{itemize}
+
+\subsection{Training protocol}
+All models are trained from the corresponding YOLO11n/YOLO12n pretrained
+checkpoint, for \todo{200} epochs at \todo{1280}px, batch size 16, with SGD
+(lr0$=0.01$, lrf$=0.01$, momentum$=0.937$, weight decay$=5\times10^{-4}$),
+a cosine learning-rate schedule, and the standard YOLO detection loss
+(box$=7.5$, cls$=0.5$, dfl$=1.5$). All variants are trained with identical
+hyperparameters and an identical batch size to isolate the effect of the
+architectural change from any optimization confound.
+
+\subsection{Evaluation metrics}
+We report precision (P), recall (R), mAP\textsubscript{50}, and
+mAP\textsubscript{50-95}, computed on the validation split with a
+confidence threshold of $0.001$ and an NMS IoU threshold of $0.7$, matching
+the YOLO validation protocol so that results are directly comparable
+across variants. \todo{Add a small-object-only breakdown (e.g. COCO-style
+area$<32^2$px bucket) once per-size metrics are available, since aggregate
+mAP can dilute a small-object-targeted improvement.}
+
+\section{Results}
+\label{sec:results}
+
+\todo{All tables below are placeholders pending completion of full-length
+(200-epoch) training runs for every model/dataset pair. Do not submit with
+placeholder values.}
+
+\begin{table}[htbp]
+\caption{DOTA v1.5 -- validation results}
+\label{tab:dota}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Model & P & R & mAP\textsubscript{50} & mAP\textsubscript{50-95} \\
+\midrule
+YOLO11      & \todo{} & \todo{} & \todo{} & \todo{} \\
+YOLO12      & \todo{} & \todo{} & \todo{} & \todo{} \\
+GL          & \todo{} & \todo{} & \todo{} & \todo{} \\
+GLCCP       & \todo{} & \todo{} & \todo{} & \todo{} \\
+CCP         & \todo{} & \todo{} & \todo{} & \todo{} \\
+SCC (ours)  & \todo{} & \todo{} & \todo{} & \todo{} \\
+T (ours)    & \todo{} & \todo{} & \todo{} & \todo{} \\
+COMBO (ours)& \todo{} & \todo{} & \todo{} & \todo{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\caption{VisDrone -- validation results}
+\label{tab:visdrone}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Model & P & R & mAP\textsubscript{50} & mAP\textsubscript{50-95} \\
+\midrule
+YOLO11      & \todo{} & \todo{} & \todo{} & \todo{} \\
+YOLO12      & \todo{} & \todo{} & \todo{} & \todo{} \\
+GL          & \todo{} & \todo{} & \todo{} & \todo{} \\
+GLCCP       & \todo{} & \todo{} & \todo{} & \todo{} \\
+CCP         & \todo{} & \todo{} & \todo{} & \todo{} \\
+SCC (ours)  & \todo{} & \todo{} & \todo{} & \todo{} \\
+T (ours)    & \todo{} & \todo{} & \todo{} & \todo{} \\
+COMBO (ours)& \todo{} & \todo{} & \todo{} & \todo{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\caption{Model size and compute cost (scale n)}
+\label{tab:cost}
+\centering
+\begin{tabular}{lcc}
+\toprule
+Model & Params (M) & GFLOPs \\
+\midrule
+YOLO11      & 2.59 & \todo{} \\
+GLCCP (CCP) & 2.79 & \todo{} \\
+SCC (ours)  & 4.27 & \todo{} \\
+T (ours)    & 2.49 & \todo{} \\
+COMBO (ours)& 4.37 & \todo{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation discussion}
+\todo{Once Tables~\ref{tab:dota}--\ref{tab:visdrone} are populated, discuss:
+(i) whether SCC alone improves over GL/CCP, isolating the contribution of
+the CSP shortcut and CBAM attention from the dilation-based context
+aggregation used by GL/CCP; (ii) whether T alone (early-stage, P2 head)
+outperforms every P5-only variant, as argued in
+Section~\ref{sec:intro} on resolution grounds; (iii) whether COMBO's
+improvement over the best single-intervention variant is closer to additive
+or to redundant, which is the central empirical question this ablation is
+designed to answer.}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented a controlled ablation of three complementary interventions
+for small-object detection in YOLO11/YOLO12 -- an attention-refined SPPF
+replacement at the network's lowest-resolution stage, a high-resolution
+early-stage attention branch with a dedicated P2 detection head, and
+content-aware FPN upsampling -- and a combined architecture that integrates
+all three. \todo{One or two sentences summarizing the final quantitative
+conclusion once Section~\ref{sec:results} is complete.} Future work includes
+extending the ablation to inference-time techniques orthogonal to
+architecture (tiled/sliced inference, small-object-aware NMS, and IoU-loss
+variants less sensitive to small-box localization error), and evaluating
+transfer to additional aerial benchmarks beyond DOTA and VisDrone.
+
+\section*{Acknowledgments}
+\todo{Funding / acknowledgments, if any.}
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{00}
+
+\bibitem{redmon2016yolo}
+J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, ``You only look once: Unified, real-time object detection,'' in \emph{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2016.
+
+\bibitem{he2015spp}
+K. He, X. Zhang, S. Ren, and J. Sun, ``Spatial pyramid pooling in deep convolutional networks for visual recognition,'' \emph{IEEE Trans. Pattern Anal. Mach. Intell.}, vol. 37, no. 9, pp. 1904--1916, 2015.
+
+\bibitem{wang2023yolov7}
+C.-Y. Wang, A. Bochkovskiy, and H.-Y. M. Liao, ``YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2023.
+
+\bibitem{liu2018rfb}
+S. Liu, D. Huang, and Y. Wang, ``Receptive field block net for accurate and fast object detection,'' in \emph{Proc. Eur. Conf. Comput. Vis. (ECCV)}, 2018.
+
+\bibitem{chen2017deeplab}
+L.-C. Chen, G. Papandreou, F. Schroff, and H. Adam, ``Rethinking atrous convolution for semantic image segmentation,'' \emph{arXiv preprint arXiv:1706.05587}, 2017.
+
+\bibitem{woo2018cbam}
+S. Woo, J. Park, J.-Y. Lee, and I. S. Kweon, ``CBAM: Convolutional block attention module,'' in \emph{Proc. Eur. Conf. Comput. Vis. (ECCV)}, 2018.
+
+\bibitem{yang2021simam}
+L. Yang, R.-Y. Zhang, L. Li, and X. Xie, ``SimAM: A simple, parameter-free attention module for convolutional neural networks,'' in \emph{Proc. Int. Conf. Mach. Learn. (ICML)}, 2021.
+
+\bibitem{wang2019carafe}
+J. Wang, K. Chen, R. Xu, Z. Liu, C. C. Loy, and D. Lin, ``CARAFE: Content-aware reassembly of features,'' in \emph{Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)}, 2019.
+
+\bibitem{xia2018dota}
+G.-S. Xia, X. Bai, J. Ding, Z. Zhu, S. Belongie, J. Luo, M. Datcu, M. Pelillo, and L. Zhang, ``DOTA: A large-scale dataset for object detection in aerial images,'' in \emph{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2018.
+
+\bibitem{zhu2021visdrone}
+P. Zhu, L. Wen, D. Du, X. Bian, H. Fan, Q. Hu, and H. Ling, ``Detection and tracking meet drones challenge,'' \emph{IEEE Trans. Pattern Anal. Mach. Intell.}, vol. 44, no. 11, pp. 7380--7399, 2021.
+
+\end{thebibliography}
+
+\end{document}
