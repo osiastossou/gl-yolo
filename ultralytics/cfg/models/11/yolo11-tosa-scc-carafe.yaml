@@ -1,0 +1,124 @@
+# TinyYOLO-SCC-CARAFE — combined small-object variant
+# =====================================================
+# Takes yolo11-tosa.yaml (TOSA + P2 head) as the early-stage/high-resolution
+# base, and layers on the two other small-object levers that exist
+# separately elsewhere in this repo, so their combined effect can be
+# measured against each one in isolation:
+#
+#   1. TOSA modules inserted after high-resolution feature maps
+#      (layers 2 and 4 — stride-4 and stride-8 maps) — from yolo11-tosa.yaml
+#   2. AvgPoolDWConv replaces the two Conv(stride=2) downsamplers
+#      P2->P3 and P3->P4 — from yolo11-tosa.yaml
+#   3. P2 detection head added at stride 4 (160x160 for 640-px input)
+#      — from yolo11-tosa.yaml
+#   4. SPPF -> SPPFCSPC_CBAM at P5 (layer 11) — from yolo11-gl-sppfcspc-cbam.yaml
+#      (CSP shortcut + attention-refined pooling branch instead of plain MaxPool cascade)
+#   5. nn.Upsample -> CARAFEFast in the top-down FPN path — from yolo11-uva.yaml
+#      (content-aware reassembly instead of nearest-neighbor, so upsampling
+#      reconstructs more of the detail a small object needs)
+#
+# The backbone/head topology (layer numbering, `from` indices) is otherwise
+# identical to yolo11-tosa.yaml -- only modules 4 and 5 above are swapped in,
+# so this is a clean ablation on top of the TOSA baseline.
+
+nc: 80  # number of classes — override in your dataset YAML
+
+scales:
+  # [depth, width, max_channels]  — same as vanilla YOLO11
+  n: [0.50, 0.25, 1024]
+  s: [0.50, 0.50, 1024]
+  m: [0.50, 1.00, 512]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.50, 512]
+
+# ---------------------------------------------------------------------------
+# Backbone
+# ---------------------------------------------------------------------------
+#  0  Conv        P1/2   320x320
+#  1  Conv        P2/4   160x160
+#  2  C3k2        P2/4   160x160
+#  3  TOSA        P2/4   160x160   <- amplify small-object channels+spatial
+#  4  AvgPoolDWConv      80x80    <- soft downsample P2->P3
+#  5  C3k2        P3/8    80x80
+#  6  TOSA        P3/8    80x80   <- second TOSA on P3
+#  7  AvgPoolDWConv      40x40    <- soft downsample P3->P4
+#  8  C3k2        P4/16   40x40
+#  9  Conv        P5/32   20x20
+# 10  C3k2        P5/32   20x20
+# 11  SPPFCSPC_CBAM       20x20   <- (vs plain SPPF in yolo11-tosa.yaml)
+# 12  C2PSA               20x20
+
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv,          [64, 3, 2]]          #  0  P1/2  320x320
+  - [-1, 1, Conv,          [128, 3, 2]]          #  1  P2/4  160x160
+  - [-1, 2, C3k2,          [256, False, 0.25]]   #  2        160x160
+  - [-1, 1, TOSA,          [256]]                #  3  mod1  160x160
+  - [-1, 1, AvgPoolDWConv, [256]]                #  4  mod2  -> 80x80
+  - [-1, 2, C3k2,          [512, False, 0.25]]   #  5  P3/8  80x80
+  - [-1, 1, TOSA,          [512]]                #  6  mod1  80x80
+  - [-1, 1, AvgPoolDWConv, [512]]                #  7  mod2  -> 40x40
+  - [-1, 2, C3k2,          [512, True]]          #  8  P4/16 40x40
+  - [-1, 1, Conv,          [1024, 3, 2]]         #  9  P5/32 20x20
+  - [-1, 2, C3k2,          [1024, True]]         # 10        20x20
+  - [-1, 1, SPPFCSPC_CBAM, [1024, 5]]            # 11  mod4  20x20
+  - [-1, 2, C2PSA,         [1024]]               # 12        20x20
+
+# ---------------------------------------------------------------------------
+# Head (FPN + PAN + detection heads)
+# ---------------------------------------------------------------------------
+# 13  CARAFEFast  -> 40x40                       <- mod5 (vs nn.Upsample)
+# 14  Concat(13,8)-> 40x40
+# 15  C3k2  P4    -> 40x40
+#
+# 16  CARAFEFast  -> 80x80                       <- mod5
+# 17  Concat(16,6 after TOSA) -> 80x80
+# 18  C3k2  P3    -> 80x80
+#
+# 19  CARAFEFast  -> 160x160                     <- mod5
+# 20  Concat(19,3 after TOSA) -> 160x160          <- mod3
+# 21  C3k2  P2    -> 160x160
+#
+# 22  Conv(stride2) -> 80x80
+# 23  Concat(22,18) -> 80x80
+# 24  C3k2  P3    -> 80x80
+#
+# 25  Conv(stride2) -> 40x40
+# 26  Concat(25,15) -> 40x40
+# 27  C3k2  P4    -> 40x40
+#
+# 28  Conv(stride2) -> 20x20
+# 29  Concat(28,12) -> 20x20
+# 30  C3k2  P5    -> 20x20
+#
+# 31  Detect([P2=21, P3=24, P4=27, P5=30])       <- mod3: four-head detection
+
+head:
+  # --- Top-down FPN path ---
+  - [-1,  1, CARAFEFast, []]                  # 13  40x40
+  - [[-1, 8], 1, Concat, [1]]                    # 14  cat P4 backbone
+  - [-1,  2, C3k2, [512, False]]                 # 15  P4/16  40x40
+
+  - [-1,  1, CARAFEFast, []]                  # 16  80x80
+  - [[-1, 6], 1, Concat, [1]]                    # 17  cat P3 (post-TOSA, layer 6)
+  - [-1,  2, C3k2, [256, False]]                 # 18  P3/8   80x80
+
+  - [-1,  1, CARAFEFast, []]                  # 19  160x160   — mod 3 begins
+  - [[-1, 3], 1, Concat, [1]]                    # 20  cat P2 (post-TOSA, layer 3)
+  - [-1,  2, C3k2, [128, False]]                 # 21  P2/4  160x160  <- new feature level
+
+  # --- Bottom-up PAN path ---
+  - [-1,  1, Conv, [128, 3, 2]]                  # 22  -> 80x80
+  - [[-1, 18], 1, Concat, [1]]                   # 23  cat P3 FPN output
+  - [-1,  2, C3k2, [256, False]]                 # 24  P3/8   80x80
+
+  - [-1,  1, Conv, [256, 3, 2]]                  # 25  -> 40x40
+  - [[-1, 15], 1, Concat, [1]]                   # 26  cat P4 FPN output
+  - [-1,  2, C3k2, [512, False]]                 # 27  P4/16  40x40
+
+  - [-1,  1, Conv, [512, 3, 2]]                  # 28  -> 20x20
+  - [[-1, 12], 1, Concat, [1]]                   # 29  cat P5 backbone
+  - [-1,  2, C3k2, [1024, True]]                 # 30  P5/32  20x20
+
+  # Detection: [P2, P3, P4, P5] — mod 3: P2 head at stride 4
+  - [[21, 24, 27, 30], 1, Detect, [nc]]          # 31  Detect(P2/4, P3/8, P4/16, P5/32)

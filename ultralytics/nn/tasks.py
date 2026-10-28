@@ -1622,7 +1622,7 @@ def parse_model(d, ch, verbose=True):
             GL_CAB,
             C2f_GLCAB,
             SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
+            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
             C3k2_MSD, PSWCA,GL_PSWCA,SPPFCSPC_CBAM
         }
     )
@@ -1647,7 +1647,7 @@ def parse_model(d, ch, verbose=True):
             GL_CAB,
             C2f_GLCAB,
             SPDConv,GL_CAB_DW,TOSA, AvgPoolDWConv,
-            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, CARAFEFast,S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
+            AdaptA2C2f,SimAM, BottleneckSimAM, C3kSimAM,FlexSimAM, S2DResConv,SACConv,GL_CAB_PSA,PWCConv,
             C3k2_MSD,GL_PSWCA
         }
     )
@@ -1688,6 +1688,12 @@ def parse_model(d, ch, verbose=True):
                 legacy = False
         elif m is AIFI:
             args = [ch[f], *args]
+        elif m is CARAFEFast:
+            # Channel-preserving upsample (drop-in nn.Upsample replacement), used in yaml
+            # as `[-1, 1, CARAFEFast, []]` with no channel arg -- can't go through the
+            # generic base_modules branch below, which indexes args[0] for c2.
+            c1 = c2 = ch[f]
+            args = [c1]
         elif m in frozenset({HGStem, HGBlock}):
             c1, cm, c2 = ch[f], args[0], args[1]
             args = [c1, cm, c2, *args[2:]]

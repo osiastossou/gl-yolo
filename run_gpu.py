@@ -53,7 +53,8 @@ MODEL_SWEEP = [
             "Y11GLCCP-DT": "ultralytics/cfg/models/11/yolo11-gl-ccp.yaml",
             "Y11CCP-DT": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
             "Y11SCC-DT": "ultralytics/cfg/models/11/yolo11-gl-sppfcspc-cbam.yaml",
-            "Y11T-DT": "ultralytics/cfg/models/11/yolo11-tosa.yaml"
+            "Y11T-DT": "ultralytics/cfg/models/11/yolo11-tosa.yaml",
+            "Y11COMBO-DT": "ultralytics/cfg/models/11/yolo11-tosa-scc-carafe.yaml",
         },
     },
     {
@@ -67,6 +68,7 @@ MODEL_SWEEP = [
             "Y11CCP-VD": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
             "Y11SCC-VD": "ultralytics/cfg/models/11/yolo11-gl-sppfcspc-cbam.yaml",
             "Y11T-VD": "ultralytics/cfg/models/11/yolo11-tosa.yaml",
+            "Y11COMBO-VD": "ultralytics/cfg/models/11/yolo11-tosa-scc-carafe.yaml",
         },
     },
 ]
