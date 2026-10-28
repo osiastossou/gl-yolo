@@ -39,7 +39,7 @@ def str2bool(value: str) -> bool:
     raise argparse.ArgumentTypeError(f"Valeur booléenne attendue, reçu: {value!r}")
 
 
-def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False):
+def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False, batch=16):
     """Train (or resume) a YOLO model built from `modelpath`, on `data`, saving under `outname`."""
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     device = get_device()
@@ -76,7 +76,12 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, res
         epochs=epochs,
         # ── Résolution & batch ──────────────────────────────────────────
         imgsz=imgsz,
-        batch=16,  # fixe — pas d'auto-batch, pour garantir l'équité entre modèles comparés
+        # 16 par défaut pour tous les modèles (équité de comparaison) ; override possible
+        # via -batch pour les modèles trop lourds pour la VRAM disponible (ex: COMBO, qui a
+        # 4 têtes de détection + CARAFE + SPPFCSPC_CBAM). Un batch différent de celui des
+        # autres runs comparés est une entorse délibérée à l'équité stricte -- à noter
+        # explicitement dans le protocole expérimental si vous en avez besoin.
+        batch=batch,
         # ── Device ───────────────────────────────────────────────────────
         device=device,
         amp=True,
@@ -120,9 +125,10 @@ if __name__ == "__main__":
     parser.add_argument("-outname", type=str, required=True, help="project/name de sortie (ex: runs/yolo11-gl-ccp)")
     parser.add_argument("-epochs", type=int, required=True, help="Nombre d'epochs")
     parser.add_argument("-imgsz", type=int, default=640, help="Taille d'image d'entraînement (défaut: 640)")
+    parser.add_argument("-batch", type=int, default=16, help="Taille de batch (défaut: 16 ; réduire en cas d'OOM)")
     parser.add_argument("-v", type=int, default=11, choices=[11, 12], help="Version YOLO des poids pré-entraînés (défaut: 11)")
     parser.add_argument("-p", type=str2bool, default=True, help="Charger des poids pré-entraînés (défaut: True)")
     parser.add_argument("-resume", type=str2bool, default=False, help="Reprendre depuis le dernier checkpoint (défaut: False)")
 
     args = parser.parse_args()
-    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume)
+    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume, args.batch)
