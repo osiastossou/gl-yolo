@@ -334,13 +334,58 @@ small, dense instances:
 \end{itemize}
 
 \subsection{Training protocol}
-All models are trained from the corresponding YOLO11n/YOLO12n pretrained
-checkpoint, for \todo{200} epochs at \todo{1280}px, batch size 16, with SGD
+All models are trained from the corresponding YOLO11n/YOLO12n
+COCO-pretrained checkpoint, for \todo{200} epochs at \todo{1280}px, batch
+size 16 (\todo{except COMBO, trained at batch 8 on VisDrone due to a
+GPU memory constraint -- confirm which runs this applied to}), with SGD
 (lr0$=0.01$, lrf$=0.01$, momentum$=0.937$, weight decay$=5\times10^{-4}$),
 a cosine learning-rate schedule, and the standard YOLO detection loss
 (box$=7.5$, cls$=0.5$, dfl$=1.5$). All variants are trained with identical
-hyperparameters and an identical batch size to isolate the effect of the
-architectural change from any optimization confound.
+hyperparameters to isolate the effect of the architectural change from any
+optimization confound, with the batch-size exception above noted as a
+deviation.
+
+\paragraph{Weight initialization.} Pretrained weights are transferred
+tensor-by-tensor, matched by exact parameter name and shape between the
+COCO checkpoint and the target architecture; any tensor that does not
+match keeps PyTorch's default (random) initialization. Because layers are
+named by their sequential position in the network, how much of a variant
+actually inherits COCO-pretrained weights depends on \emph{where} its
+architectural changes sit, not merely on whether \texttt{pretrained=True}
+was set. We measured the exact transferred/total tensor count for every
+variant (Table~\ref{tab:init}): single-layer, same-position replacements
+(GL, SCC) leave every other layer's naming and shape unchanged, so
+$>$92\% of tensors still transfer; variants that insert additional layers
+early in the backbone (T, COMBO) or replace a block type network-wide
+(GLCCP, CCP) shift or rename most subsequent layers, so only
+$\approx$8--10\% of tensors transfer -- in practice close to training from
+scratch beyond the first stem convolution(s), despite
+\texttt{pretrained=True}. We report this because it is a potential
+confound for the comparison: part of an observed accuracy gap could stem
+from this initialization difference rather than from the architectural
+change under study. \todo{Decide whether to control for this (e.g. report
+both pretrained and from-scratch runs for the heavily-reindexed variants)
+or report it as a limitation.}
+
+\begin{table}[htbp]
+\caption{Fraction of model tensors initialized from the COCO-pretrained
+checkpoint (vs. left at PyTorch default init), scale n}
+\label{tab:init}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Variant & Transferred & Total & \% \\
+\midrule
+YOLO11 (baseline) & 499 & 499  & 100.0 \\
+GL                 & 487 & 511  & 95.3 \\
+SCC (ours)         & 493 & 532  & 92.7 \\
+GLCCP               & 161 & 1749 & 9.2 \\
+CCP                 & 173 & 1745 & 9.9 \\
+T (ours)           & 56  & 611  & 9.2 \\
+COMBO (ours)       & 56  & 665  & 8.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Evaluation metrics}
 We report precision (P), recall (R), mAP\textsubscript{50}, and
