@@ -54,11 +54,10 @@ cross-stage-partial shortcut is not; and a controlled proxy reconstruction
 task quantifying the fidelity gain of content-aware upsampling over
 nearest-neighbor interpolation. All three validations use real data and
 are fully reproducible from the accompanying code, without requiring
-full-length detector training. Large-scale comparative training on DOTA
-v1.5 and VisDrone (YOLO11, YOLO12, and every architectural variant,
-including the fully combined model) is the subject of a forthcoming
-experimental study, for which this paper establishes the architecture,
-the protocol, and the theoretical motivation.
+full-length detector training. This paper's contribution is the
+architecture and its theoretical and controlled-validation grounding;
+large-scale comparative training against YOLO11/YOLO12 baselines is left
+to a separate, future study.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -91,7 +90,8 @@ does so purely through max-pooling, which discards the fine-grained detail
 a small object needs and treats every channel and spatial location
 identically.
 
-We argue --- and structure our ablation study around the claim --- that no
+We argue --- and structure the architecture and its validation around the
+claim --- that no
 single intervention at a single stage of the network is sufficient: a
 richer SPPF replacement at P5 only reshapes the \emph{global context} that
 is later fused back into higher-resolution stages through the feature
@@ -139,10 +139,11 @@ Our contributions are:
   \item A controlled proxy experiment, trained on real DOTA image patches,
   quantifying the reconstruction-fidelity gain of content-aware upsampling
   (CARAFE) over nearest-neighbor interpolation (Section~\ref{sec:theory-carafe}).
-  \item A fully specified protocol for the large-scale comparative training
-  study (datasets, variants, hyperparameters) that this paper's theoretical
-  and controlled validations motivate, left for a forthcoming experimental
-  phase (Section~\ref{sec:experiments}).
+  \item A measurement of how much of each variant's weights can actually
+  inherit COCO-pretrained initialization given where its architectural
+  changes sit in the network (Section~\ref{sec:theory-init}), a
+  consequence of the architecture that is independent of any later
+  training run.
 \end{enumerate}
 
 \section{Related Work}
@@ -310,14 +311,16 @@ pyramid's cost.
 \subsection{Combined architecture}
 \label{sec:method-combined}
 
-Our proposed architecture (denoted COMBO in Section~\ref{sec:results})
-applies all three interventions jointly on top of the YOLO11 topology: TOSA
-and the P2 head at the backbone's high-resolution stages, SPPFCSPC-CBAM at
-P5, and CARAFE throughout the top-down FPN path. Because each intervention
-acts at a different point of the network and is independently toggleable
-in our implementation, Section~\ref{sec:results} reports both the combined
-model and each component in isolation, which lets us test directly whether
-their effects are additive, redundant, or interacting.
+Our proposed architecture, denoted \textbf{COMBO}, applies all three
+interventions jointly on top of the YOLO11 topology: TOSA and the P2 head
+at the backbone's high-resolution stages, SPPFCSPC-CBAM at P5, and CARAFE
+throughout the top-down FPN path. Each intervention acts at a different
+point of the network and is independently toggleable in our
+implementation; for brevity we refer to the SPPFCSPC-CBAM-only variant
+(SPPF unchanged elsewhere) as \textbf{SCC}, and the TOSA+P2-head-only
+variant (SPPF unchanged) as \textbf{T}. These three variants -- SCC, T,
+and COMBO -- together with the unmodified YOLO11 baseline, are the
+architectures analyzed in Section~\ref{sec:theory}.
 
 \section{Theoretical Analysis and Controlled Validation}
 \label{sec:theory}
@@ -499,79 +502,22 @@ mechanism-level claim it is designed to test: content-aware reassembly
 reconstructs information that fixed interpolation cannot, given the same
 low-resolution input.
 
-\section{Experimental Setup}
-\label{sec:experiments}
+\subsection{Weight initialization is a structural consequence of where an architectural change sits}
+\label{sec:theory-init}
 
-The large-scale comparative study outlined below is the next phase of
-this work; it was not required to validate the mechanisms in
-Section~\ref{sec:theory}, but is necessary to establish whether and by how
-much each intervention improves standard detection metrics in a full
-training regime. We specify the complete protocol here so the
-forthcoming results are directly reproducible from this description.
-
-\subsection{Datasets}
-We evaluate on two aerial/UAV object detection benchmarks dominated by
-small, dense instances:
-\begin{itemize}
-  \item \textbf{DOTA v1.5}~\cite{xia2018dota}: 1,411 training and 458
-  validation images (the official \texttt{test} split, 937 images, has no
-  public ground truth and is excluded from this study), 16 categories,
-  annotated with oriented bounding boxes, converted to axis-aligned boxes
-  for the detection task studied here.
-  \item \textbf{VisDrone}~\cite{zhu2021visdrone}: drone-captured imagery
-  across 10 object categories (pedestrian, vehicle, bicycle, etc.),
-  characterized by dense small-object scenes with substantial occlusion.
-\end{itemize}
-
-\subsection{Models compared}
-\begin{itemize}
-  \item \textbf{YOLO11} / \textbf{YOLO12}: unmodified baselines.
-  \item \textbf{GL}: SPPF replaced by a non-attention GL-CAB block at P5
-  only, isolating the effect of the architectural change itself from
-  attention.
-  \item \textbf{GLCCP} / \textbf{CCP}: two further SPPF-slot variants built
-  on progressive dilated context aggregation (GL-PSWCA).
-  \item \textbf{SCC}: our SPPFCSPC-CBAM module (Section~\ref{sec:method-sppf})
-  in isolation, all other stages unchanged from YOLO11.
-  \item \textbf{T}: TOSA + P2 head (Section~\ref{sec:method-tosa}) in
-  isolation, SPPF unchanged.
-  \item \textbf{COMBO}: our full proposed architecture
-  (Section~\ref{sec:method-combined}).
-\end{itemize}
-
-\subsection{Training protocol}
-All models are trained from the corresponding YOLO11n/YOLO12n
-COCO-pretrained checkpoint, for \todo{200} epochs at \todo{1280}px, batch
-size 16 (\todo{except COMBO, trained at batch 8 on VisDrone due to a
-GPU memory constraint -- confirm which runs this applied to}), with SGD
-(lr0$=0.01$, lrf$=0.01$, momentum$=0.937$, weight decay$=5\times10^{-4}$),
-a cosine learning-rate schedule, and the standard YOLO detection loss
-(box$=7.5$, cls$=0.5$, dfl$=1.5$). All variants are trained with identical
-hyperparameters to isolate the effect of the architectural change from any
-optimization confound, with the batch-size exception above noted as a
-deviation.
-
-\paragraph{Weight initialization.} Pretrained weights are transferred
-tensor-by-tensor, matched by exact parameter name and shape between the
-COCO checkpoint and the target architecture; any tensor that does not
-match keeps PyTorch's default (random) initialization. Because layers are
-named by their sequential position in the network, how much of a variant
-actually inherits COCO-pretrained weights depends on \emph{where} its
-architectural changes sit, not merely on whether \texttt{pretrained=True}
-was set. We measured the exact transferred/total tensor count for every
-variant (Table~\ref{tab:init}): single-layer, same-position replacements
-(GL, SCC) leave every other layer's naming and shape unchanged, so
-$>$92\% of tensors still transfer; variants that insert additional layers
-early in the backbone (T, COMBO) or replace a block type network-wide
-(GLCCP, CCP) shift or rename most subsequent layers, so only
-$\approx$8--10\% of tensors transfer -- in practice close to training from
-scratch beyond the first stem convolution(s), despite
-\texttt{pretrained=True}. We report this because it is a potential
-confound for the comparison: part of an observed accuracy gap could stem
-from this initialization difference rather than from the architectural
-change under study. \todo{Decide whether to control for this (e.g. report
-both pretrained and from-scratch runs for the heavily-reindexed variants)
-or report it as a limitation.}
+A fourth property of the architecture is checkable without any training
+at all, and is worth stating precisely because it is easy to assume
+incorrectly: warm-starting a custom architecture from a COCO-pretrained
+checkpoint (\texttt{pretrained=True}) does not mean most of the network
+is pretrained. Weights are transferred tensor-by-tensor, matched by exact
+parameter name and shape between the checkpoint and the target
+architecture; any tensor that does not match keeps PyTorch's default
+(random) initialization. Because layers are named by their sequential
+position in the network, how much of a variant actually inherits
+COCO-pretrained weights depends on \emph{where} its architectural changes
+sit, not on whether pretraining was requested. We measured the exact
+transferred/total tensor count for YOLO11 and each of our three variants
+(Table~\ref{tab:init}).
 
 \begin{table}[htbp]
 \caption{Fraction of model tensors initialized from the COCO-pretrained
@@ -583,104 +529,26 @@ checkpoint (vs. left at PyTorch default init), scale n}
 Variant & Transferred & Total & \% \\
 \midrule
 YOLO11 (baseline) & 499 & 499  & 100.0 \\
-GL                 & 487 & 511  & 95.3 \\
 SCC (ours)         & 493 & 532  & 92.7 \\
-GLCCP               & 161 & 1749 & 9.2 \\
-CCP                 & 173 & 1745 & 9.9 \\
 T (ours)           & 56  & 611  & 9.2 \\
 COMBO (ours)       & 56  & 665  & 8.4 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Evaluation metrics}
-We report precision (P), recall (R), mAP\textsubscript{50}, and
-mAP\textsubscript{50-95}, computed on the validation split with a
-confidence threshold of $0.001$ and an NMS IoU threshold of $0.7$, matching
-the YOLO validation protocol so that results are directly comparable
-across variants. \todo{Add a small-object-only breakdown (e.g. COCO-style
-area$<32^2$px bucket) once per-size metrics are available, since aggregate
-mAP can dilute a small-object-targeted improvement.}
-
-\section{Planned Large-Scale Results}
-\label{sec:results}
-
-The tables in this section report the metrics the forthcoming
-experimental phase will populate, in the exact form the final submission
-will use; they are deliberately included empty (rather than omitted) so
-that the comparison protocol -- which models, which metrics, which
-datasets -- is reviewable now, ahead of the results themselves.
-\todo{All tables below are placeholders pending completion of full-length
-(200-epoch) training runs for every model/dataset pair. Do not submit with
-placeholder values.}
-
-\begin{table}[htbp]
-\caption{DOTA v1.5 -- validation results}
-\label{tab:dota}
-\centering
-\begin{tabular}{lcccc}
-\toprule
-Model & P & R & mAP\textsubscript{50} & mAP\textsubscript{50-95} \\
-\midrule
-YOLO11      & \todo{} & \todo{} & \todo{} & \todo{} \\
-YOLO12      & \todo{} & \todo{} & \todo{} & \todo{} \\
-GL          & \todo{} & \todo{} & \todo{} & \todo{} \\
-GLCCP       & \todo{} & \todo{} & \todo{} & \todo{} \\
-CCP         & \todo{} & \todo{} & \todo{} & \todo{} \\
-SCC (ours)  & \todo{} & \todo{} & \todo{} & \todo{} \\
-T (ours)    & \todo{} & \todo{} & \todo{} & \todo{} \\
-COMBO (ours)& \todo{} & \todo{} & \todo{} & \todo{} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[htbp]
-\caption{VisDrone -- validation results}
-\label{tab:visdrone}
-\centering
-\begin{tabular}{lcccc}
-\toprule
-Model & P & R & mAP\textsubscript{50} & mAP\textsubscript{50-95} \\
-\midrule
-YOLO11      & \todo{} & \todo{} & \todo{} & \todo{} \\
-YOLO12      & \todo{} & \todo{} & \todo{} & \todo{} \\
-GL          & \todo{} & \todo{} & \todo{} & \todo{} \\
-GLCCP       & \todo{} & \todo{} & \todo{} & \todo{} \\
-CCP         & \todo{} & \todo{} & \todo{} & \todo{} \\
-SCC (ours)  & \todo{} & \todo{} & \todo{} & \todo{} \\
-T (ours)    & \todo{} & \todo{} & \todo{} & \todo{} \\
-COMBO (ours)& \todo{} & \todo{} & \todo{} & \todo{} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[htbp]
-\caption{Model size and compute cost (scale n)}
-\label{tab:cost}
-\centering
-\begin{tabular}{lcc}
-\toprule
-Model & Params (M) & GFLOPs \\
-\midrule
-YOLO11      & 2.59 & \todo{} \\
-GLCCP (CCP) & 2.79 & \todo{} \\
-SCC (ours)  & 4.27 & \todo{} \\
-T (ours)    & 2.49 & \todo{} \\
-COMBO (ours)& 4.37 & \todo{} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Ablation discussion}
-\todo{Once Tables~\ref{tab:dota}--\ref{tab:visdrone} are populated, discuss:
-(i) whether SCC alone improves over GL/CCP, isolating the contribution of
-the CSP shortcut and CBAM attention from the dilation-based context
-aggregation used by GL/CCP; (ii) whether T alone (early-stage, P2 head)
-outperforms every P5-only variant, as argued in
-Section~\ref{sec:intro} on resolution grounds; (iii) whether COMBO's
-improvement over the best single-intervention variant is closer to additive
-or to redundant, which is the central empirical question this ablation is
-designed to answer.}
+SCC replaces a single layer (SPPF) at a fixed position, so every other
+layer's name and shape is unchanged and $92.7\%$ of tensors still
+transfer. T inserts additional layers early in the backbone (TOSA,
+the average-pooling downsamplers), which shifts the sequential naming of
+every subsequent layer; only $9.2\%$ of tensors transfer, concentrated in
+the first stem convolution(s) before the first insertion. COMBO inherits
+T's backbone and therefore shows the same pattern ($8.4\%$). This is a
+direct, structural consequence of how each architecture is built, not an
+artifact of training: T and COMBO are, in effect, trained from near
+scratch beyond the stem despite requesting pretrained weights, while SCC
+is not. Any later comparative study must either account for this (e.g. by
+reporting both pretrained and from-scratch runs for T/COMBO) or treat it
+explicitly as a confound alongside the architectural change itself.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -701,17 +569,17 @@ local maximum, while the CSP shortcut our SPPFCSPC-CBAM module adds has
 nonzero gradient everywhere -- a structural, not merely empirical,
 difference. A controlled reconstruction proxy shows content-aware
 upsampling recovering 1.17\,dB more PSNR than nearest-neighbor
-interpolation after a training budget of minutes, not hours. Together,
-these results establish that each intervention addresses a real,
-measurable limitation of the baseline through the specific mechanism
-claimed for it, ahead of the large-scale comparative training study
-(Section~\ref{sec:experiments}) that will determine the magnitude of
-their effect on standard detection metrics. Future work includes that
-large-scale study itself, extending the analysis to inference-time
-techniques orthogonal to architecture (tiled/sliced inference,
-small-object-aware NMS, and IoU-loss variants less sensitive to
-small-box localization error), and evaluating transfer to additional
-aerial benchmarks beyond DOTA and VisDrone.
+interpolation after a training budget of minutes, not hours. Finally, we
+showed that how much of a variant's weights actually inherit
+COCO-pretraining is a structural consequence of where its architectural
+changes sit in the network, not merely of requesting pretrained weights:
+T and COMBO are, in this precise sense, trained from near scratch beyond
+the stem. Together, these results establish that each intervention
+addresses a real, measurable limitation of the baseline through the
+specific mechanism claimed for it. Measuring the magnitude of that effect
+on standard detection metrics, at scale and across both datasets, is left
+to a separate, future experimental study building directly on the
+architecture and protocol established here.
 
 \section*{Acknowledgments}
 \todo{Funding / acknowledgments, if any.}
