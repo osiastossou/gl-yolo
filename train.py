@@ -39,10 +39,14 @@ def str2bool(value: str) -> bool:
     raise argparse.ArgumentTypeError(f"Valeur booléenne attendue, reçu: {value!r}")
 
 
-def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False, batch=16):
+def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False, batch=16, gpu_mem_frac=None):
     """Train (or resume) a YOLO model built from `modelpath`, on `data`, saving under `outname`."""
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     device = get_device()
+
+    if gpu_mem_frac is not None and torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(gpu_mem_frac, device=0)
+        print(f"VRAM limitée à {gpu_mem_frac * 100:.0f}% du GPU (partage avec d'autres processus).")
 
     if resume:
         print("Reprise de l'entraînement à partir du dernier checkpoint.")
@@ -129,6 +133,11 @@ if __name__ == "__main__":
     parser.add_argument("-v", type=int, default=11, choices=[11, 12], help="Version YOLO des poids pré-entraînés (défaut: 11)")
     parser.add_argument("-p", type=str2bool, default=True, help="Charger des poids pré-entraînés (défaut: True)")
     parser.add_argument("-resume", type=str2bool, default=False, help="Reprendre depuis le dernier checkpoint (défaut: False)")
+    parser.add_argument(
+        "-gpu-mem-frac", type=float, default=None,
+        help="Limite la fraction de VRAM utilisable sur le GPU choisi (0-1), pour ne pas monopoliser une GPU "
+        "partagée avec d'autres processus. Défaut: aucune limite.",
+    )
 
     args = parser.parse_args()
-    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume, args.batch)
+    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume, args.batch, args.gpu_mem_frac)

@@ -16,11 +16,17 @@ progress bars on a shared stdout would just corrupt the display. Once the
 sweep is done, the whole `runs/` results folder is zipped up (e.g. to grab
 it from Colab or upload it to Drive in one shot).
 
+By default this is a good neighbor on a shared machine: it only picks GPUs
+that are actually idle (`detect_free_gpus`, via `nvidia-smi` utilization/free
+-memory thresholds -- skips any GPU someone else is already using), and runs
+each job `nice`d so it yields CPU to other processes/services on the box.
+
 Example:
-    python run_gpu.py -epochs 200 -imgsz 1280                  # auto-detects every GPU
-    python run_gpu.py -epochs 200 -imgsz 1280 --gpus 0,1,3      # pin to specific GPUs
-    python run_gpu.py -epochs 200 -imgsz 1280 --dry-run         # print the commands only
-    python run_gpu.py -epochs 200 -imgsz 1280 --no-zip          # skip the final zip
+    python run_gpu.py -epochs 200 -imgsz 1280                   # auto-detects idle GPUs only
+    python run_gpu.py -epochs 200 -imgsz 1280 --gpus 0,1,3       # pin to specific GPUs (bypasses the idle check)
+    python run_gpu.py -epochs 200 -imgsz 1280 --gpu-mem-frac 0.5 # cap VRAM per run on a shared GPU
+    python run_gpu.py -epochs 200 -imgsz 1280 --dry-run          # print the commands only
+    python run_gpu.py -epochs 200 -imgsz 1280 --no-zip           # skip the final zip
 """
 
 import argparse
@@ -79,9 +85,12 @@ def yolo_version(name: str) -> int:
     return 12 if name.startswith("Y12") else 11
 
 
-def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version):
-    """Build the `python train.py ...` argv for one run."""
-    return [
+def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version, nice=None, gpu_mem_frac=None):
+    """Build the `python train.py ...` argv for one run, optionally niced and VRAM-capped."""
+    cmd = []
+    if nice is not None:
+        cmd += ["nice", "-n", str(nice)]  # lower CPU scheduling priority: yield to other processes
+    cmd += [
         sys.executable,
         str(TRAIN_SCRIPT),
         "-v", str(version),
@@ -91,6 +100,9 @@ def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version):
         "-outname", outname,
         "-epochs", str(epochs),
     ]
+    if gpu_mem_frac is not None:
+        cmd += ["-gpu-mem-frac", str(gpu_mem_frac)]
+    return cmd
 
 
 def detect_gpu_count():
@@ -101,6 +113,35 @@ def detect_gpu_count():
         return max(torch.cuda.device_count(), 1)
     except Exception:
         return 1
+
+
+def detect_free_gpus(max_util=20, min_free_mb=2048):
+    """Pick only GPUs that are actually idle, instead of blindly grabbing every GPU index.
+
+    Queries `nvidia-smi` for per-GPU utilization and free memory, and excludes any GPU already
+    in use by someone else's process above the given thresholds -- this is the fix for launching
+    a sweep on a shared machine and accidentally starving other people's jobs/services on GPUs
+    that were already busy. Falls back to `detect_gpu_count()` (every CUDA GPU, or a single
+    CPU/MPS worker) when `nvidia-smi` isn't available, e.g. on this Mac.
+    """
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index,memory.used,memory.total,utilization.gpu", "--format=csv,noheader,nounits"],
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return list(range(detect_gpu_count()))
+
+    free, busy = [], []
+    for line in out.strip().splitlines():
+        idx, used, total, util = (int(x.strip()) for x in line.split(","))
+        (free if (total - used) >= min_free_mb and util <= max_util else busy).append((idx, total - used, util))
+
+    if busy:
+        print("[gpu] ignorée(s) car déjà utilisée(s): " + ", ".join(f"GPU{i} ({u}% util, {f}MB libre)" for i, f, u in busy))
+    if not free:
+        print("[gpu] aucune GPU libre sous les seuils actuels -- rien ne sera lancé sur cette machine partagée.")
+    return [i for i, _, _ in free]
 
 
 def collect_jobs(sweep, imgsz, skip_existing):
@@ -125,13 +166,13 @@ def collect_jobs(sweep, imgsz, skip_existing):
     return jobs
 
 
-def run_job(job, epochs, imgsz, gpu_id, dry_run):
+def run_job(job, epochs, imgsz, gpu_id, dry_run, nice=None, gpu_mem_frac=None):
     """Run one job pinned to `gpu_id`, logging its output to `logs/<name><imgsz>.log`.
 
     Returns True on success (or in dry-run mode), False if the subprocess failed.
     """
     version = yolo_version(job["name"])
-    cmd = build_command(job["model_yaml"], job["data_yaml"], job["outname"], epochs, imgsz, version)
+    cmd = build_command(job["model_yaml"], job["data_yaml"], job["outname"], epochs, imgsz, version, nice, gpu_mem_frac)
     tag = f"{job['name']} ({job['dataset_name']})"
     print(f"[GPU {gpu_id}] démarre {tag}: {' '.join(cmd)}")
     if dry_run:
@@ -150,7 +191,7 @@ def run_job(job, epochs, imgsz, gpu_id, dry_run):
     return ok
 
 
-def run_sweep(sweep, epochs, imgsz, gpu_ids, skip_existing=True, dry_run=False):
+def run_sweep(sweep, epochs, imgsz, gpu_ids, skip_existing=True, dry_run=False, nice=None, gpu_mem_frac=None):
     """Run every (dataset, architecture) pair in `sweep`, spread across `gpu_ids`.
 
     One worker thread per GPU pulls jobs from a shared queue (so a GPU that finishes
@@ -189,7 +230,7 @@ def run_sweep(sweep, epochs, imgsz, gpu_ids, skip_existing=True, dry_run=False):
             except queue.Empty:
                 return
             try:
-                if not run_job(job, epochs, imgsz, gpu_id, dry_run):
+                if not run_job(job, epochs, imgsz, gpu_id, dry_run, nice, gpu_mem_frac):
                     with lock:
                         failures.append(job["name"])
             finally:
@@ -236,8 +277,27 @@ if __name__ == "__main__":
     parser.add_argument("--no-zip", action="store_true", help="Ne pas zipper le dossier runs à la fin du sweep")
     parser.add_argument(
         "--gpus", type=str, default=None,
-        help="IDs GPU séparés par des virgules (ex: '0,1,2,3'). Défaut: toutes les GPU détectées via torch "
-        "(1 seul worker si aucune GPU CUDA, ex. sur Mac/MPS ou CPU).",
+        help="IDs GPU séparés par des virgules (ex: '0,1,2,3'). Défaut: auto-détection des GPU réellement "
+        "libres (via nvidia-smi, cf. --max-gpu-util/--min-free-mem-mb) pour ne pas empiéter sur des GPU "
+        "déjà utilisées par d'autres (1 seul worker si aucune GPU CUDA, ex. sur Mac/MPS ou CPU).",
+    )
+    parser.add_argument(
+        "--max-gpu-util", type=int, default=20,
+        help="Utilisation GPU (%%) max tolérée pour considérer une GPU comme libre (défaut: 20). Ignoré si --gpus.",
+    )
+    parser.add_argument(
+        "--min-free-mem-mb", type=int, default=2048,
+        help="Mémoire GPU libre (MB) minimale requise pour considérer une GPU comme libre (défaut: 2048). Ignoré si --gpus.",
+    )
+    parser.add_argument(
+        "--nice", type=int, default=15,
+        help="Priorité CPU du sous-processus train.py (0-19, plus haut = moins prioritaire = cède la main plus "
+        "facilement aux autres processus de la machine). Défaut: 15. Mettre 0 pour désactiver.",
+    )
+    parser.add_argument(
+        "--gpu-mem-frac", type=float, default=None,
+        help="Limite la fraction de VRAM utilisable par run (0-1), pour ne pas monopoliser une GPU partagée. "
+        "Défaut: aucune limite.",
     )
     parser.add_argument(
         "--datasets", type=str, default=None,
@@ -245,8 +305,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    gpu_ids = [int(g) for g in args.gpus.split(",")] if args.gpus else list(range(detect_gpu_count()))
+    gpu_ids = [int(g) for g in args.gpus.split(",")] if args.gpus else detect_free_gpus(args.max_gpu_util, args.min_free_mem_mb)
     print(f"GPU(s) utilisée(s): {gpu_ids}")
+    if not gpu_ids:
+        sys.exit(1)
 
     sweep = MODEL_SWEEP
     if args.datasets:
@@ -261,6 +323,8 @@ if __name__ == "__main__":
         gpu_ids=gpu_ids,
         skip_existing=not args.no_skip_existing,
         dry_run=args.dry_run,
+        nice=args.nice or None,
+        gpu_mem_frac=args.gpu_mem_frac,
     )
 
     if not args.dry_run and not args.no_zip:
