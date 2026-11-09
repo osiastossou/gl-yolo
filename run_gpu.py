@@ -50,6 +50,20 @@ LOGS_DIR = REPO_ROOT / "logs"
 # the custom architecture.
 MODEL_SWEEP = [
     {
+        "dataset_name": "MVA",
+        "yaml": "ultralytics/cfg/datasets/MVA.yaml",
+        "folder_model": {
+            "Y11-MVA": "ultralytics/cfg/models/11/yolo11.yaml",
+            "Y12-MVA": "ultralytics/cfg/models/12/yolo12.yaml",
+            "Y11GL-MVA": "ultralytics/cfg/models/11/yolo11-sppf-gl.yaml",
+            "Y11GLCCP-MVA": "ultralytics/cfg/models/11/yolo11-gl-ccp.yaml",
+            "Y11CCP-MVA": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
+            "Y11SCC-MVA": "ultralytics/cfg/models/11/yolo11-gl-sppfcspc-cbam.yaml",
+            "Y11T-MVA": "ultralytics/cfg/models/11/yolo11-tosa.yaml",
+            "Y11COMBO-MVA": "ultralytics/cfg/models/11/yolo11-tosa-scc-carafe.yaml",
+        },
+    },
+    {
         "dataset_name": "DT",
         "yaml": "ultralytics/cfg/datasets/DOTAv1.5.yaml",
         "folder_model": {
@@ -75,20 +89,6 @@ MODEL_SWEEP = [
             "Y11SCC-VD": "ultralytics/cfg/models/11/yolo11-gl-sppfcspc-cbam.yaml",
             "Y11T-VD": "ultralytics/cfg/models/11/yolo11-tosa.yaml",
             "Y11COMBO-VD": "ultralytics/cfg/models/11/yolo11-tosa-scc-carafe.yaml",
-        },
-    },
-    {
-        "dataset_name": "MVA",
-        "yaml": "ultralytics/cfg/datasets/MVA.yaml",
-        "folder_model": {
-            "Y11-MVA": "ultralytics/cfg/models/11/yolo11.yaml",
-            "Y12-MVA": "ultralytics/cfg/models/12/yolo12.yaml",
-            "Y11GL-MVA": "ultralytics/cfg/models/11/yolo11-sppf-gl.yaml",
-            "Y11GLCCP-MVA": "ultralytics/cfg/models/11/yolo11-gl-ccp.yaml",
-            "Y11CCP-MVA": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
-            "Y11SCC-MVA": "ultralytics/cfg/models/11/yolo11-gl-sppfcspc-cbam.yaml",
-            "Y11T-MVA": "ultralytics/cfg/models/11/yolo11-tosa.yaml",
-            "Y11COMBO-MVA": "ultralytics/cfg/models/11/yolo11-tosa-scc-carafe.yaml",
         },
     },
 ]
