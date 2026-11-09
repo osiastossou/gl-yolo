@@ -27,6 +27,7 @@ download: |
   import gdown
 
   dir = Path(yaml["path"]).resolve()  # datasets/MVA
+  dir.parent.mkdir(parents=True, exist_ok=True)  # gdown, unlike Ultralytics' own downloader, won't create it itself
   zip_path = dir.parent / "mva2023_sod4bird_dataset.zip"
   gdown.download(id="1Jt1CzdaqyHm7Ipd9oAFYxDLBfgJ6EQyY", output=str(zip_path), quiet=False, fuzzy=True)
   with zipfile.ZipFile(zip_path) as zf:
