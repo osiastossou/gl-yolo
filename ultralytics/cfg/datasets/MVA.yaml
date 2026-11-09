@@ -16,24 +16,21 @@ names:
   0: bird
 
 # Download script/URL (optional) ---------------------------------------------------------------------------------------
-# Fetches the zipped dataset from its Google Drive share link (must be set to "Anyone with the link") -- works
-# from any machine with internet access (Colab, this Mac, a rented GPU box, ...), no Drive mount required.
-# Uses `gdown` rather than Ultralytics' own downloader: this file is ~6 GB, past the size where Drive serves a
-# "can't scan for viruses" confirmation page that Ultralytics' gdrive handling doesn't negotiate but gdown does.
+# Fetches the zipped dataset from Hugging Face Hub -- plain HTTPS, no download quota (unlike the Google Drive
+# share link this used before), works from any machine with internet access, no Drive mount required.
 download: |
-  import zipfile
   from pathlib import Path
 
-  import gdown
+  from ultralytics.utils.downloads import safe_download
 
   dir = Path(yaml["path"]).resolve()  # datasets/MVA
-  dir.parent.mkdir(parents=True, exist_ok=True)  # gdown, unlike Ultralytics' own downloader, won't create it itself
-  zip_path = dir.parent / "mva2023_sod4bird_dataset.zip"
-  gdown.download(id="1Jt1CzdaqyHm7Ipd9oAFYxDLBfgJ6EQyY", output=str(zip_path), quiet=False, fuzzy=True)
-  with zipfile.ZipFile(zip_path) as zf:
-      zf.extractall(dir.parent)
-  zip_path.unlink()
-  # si le zip contient un dossier racine différent de "MVA" (ex: "mva2023_sod4bird_dataset"), on le renomme
+  safe_download(
+      url="https://huggingface.co/datasets/osiastossou/mva2023-sod4bird/resolve/main/mva2023_sod4bird_dataset.zip",
+      dir=dir.parent,
+      unzip=True,
+      delete=True,
+  )
+  # le zip contient un dossier racine différent de "MVA" ("mva2023_sod4bird_dataset"), on le renomme
   if not dir.exists():
       candidates = [p for p in dir.parent.iterdir() if p.is_dir() and p.name not in {"MVA", "__MACOSX"}]
       if len(candidates) == 1:
