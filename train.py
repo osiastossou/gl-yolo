@@ -16,6 +16,22 @@ from ultralytics import YOLO
 PRETRAINED_WEIGHTS = {11: "yolo11n.pt", 12: "yolo12n.pt"}
 
 
+def configure_colab_datasets_dir():
+    """On Colab, point Ultralytics' dataset cache at local disk rather than wherever it last landed.
+
+    This repo is cloned onto Drive (so `runs/`/`logs/` survive session disconnects), but letting
+    the dataset cache default to a path under that same Drive mount means training reads every
+    image through the slow Drive-mounted filesystem, and a session restart can leave a half
+    -downloaded dataset there from a prior attempt with no local-disk fallback to recover from.
+    Deliberately *not* a notebook cell: that only takes effect if re-run in the right order every
+    session, which is exactly the kind of easy-to-forget step that caused that stale half-download.
+    """
+    if "COLAB_RELEASE_TAG" in os.environ:
+        from ultralytics import settings
+
+        settings.update({"datasets_dir": "/content/datasets"})
+
+
 def get_device():
     """Pick the best available device: CUDA > MPS (Apple Silicon) > TPU (XLA) > CPU."""
     if torch.cuda.is_available():
@@ -42,6 +58,7 @@ def str2bool(value: str) -> bool:
 def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False, batch=16, gpu_mem_frac=None):
     """Train (or resume) a YOLO model built from `modelpath`, on `data`, saving under `outname`."""
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    configure_colab_datasets_dir()
     device = get_device()
 
     if gpu_mem_frac is not None and torch.cuda.is_available():
