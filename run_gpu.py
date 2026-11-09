@@ -85,8 +85,8 @@ def yolo_version(name: str) -> int:
     return 12 if name.startswith("Y12") else 11
 
 
-def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version, nice=None, gpu_mem_frac=None):
-    """Build the `python train.py ...` argv for one run, optionally niced and VRAM-capped."""
+def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version, nice=None, gpu_mem_frac=None, resume=False):
+    """Build the `python train.py ...` argv for one run, optionally niced, VRAM-capped and resumed."""
     cmd = []
     if nice is not None:
         cmd += ["nice", "-n", str(nice)]  # lower CPU scheduling priority: yield to other processes
@@ -102,6 +102,8 @@ def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version, nice=N
     ]
     if gpu_mem_frac is not None:
         cmd += ["-gpu-mem-frac", str(gpu_mem_frac)]
+    if resume:
+        cmd += ["-resume", "True"]
     return cmd
 
 
@@ -145,7 +147,12 @@ def detect_free_gpus(max_util=20, min_free_mb=2048):
 
 
 def collect_jobs(sweep, imgsz, skip_existing):
-    """Flatten MODEL_SWEEP into a job list, skipping entries with no YAML or an already-finished run."""
+    """Flatten MODEL_SWEEP into a job list, skipping finished runs and resuming interrupted ones.
+
+    A run whose `last.pt` exists but not `best.pt` was cut short mid-training (e.g. a Colab
+    session disconnect) -- it's queued with `resume=True` to continue from that checkpoint
+    instead of silently restarting from epoch 0 and throwing away everything already trained.
+    """
     jobs = []
     for dataset in sweep:
         data_yaml = dataset["yaml"]
@@ -155,13 +162,25 @@ def collect_jobs(sweep, imgsz, skip_existing):
                 continue
 
             outname = f"runs/{name}{imgsz}"
-            best_weights = REPO_ROOT / outname / "weights" / "best.pt"
+            weights_dir = REPO_ROOT / outname / "weights"
+            best_weights = weights_dir / "best.pt"
             if skip_existing and best_weights.exists():
                 print(f"[skip] {name}: {best_weights} existe déjà.")
                 continue
 
+            resume = skip_existing and (weights_dir / "last.pt").exists()
+            if resume:
+                print(f"[resume] {name}: reprise depuis {weights_dir / 'last.pt'}.")
+
             jobs.append(
-                {"name": name, "dataset_name": dataset["dataset_name"], "model_yaml": model_yaml, "data_yaml": data_yaml, "outname": outname}
+                {
+                    "name": name,
+                    "dataset_name": dataset["dataset_name"],
+                    "model_yaml": model_yaml,
+                    "data_yaml": data_yaml,
+                    "outname": outname,
+                    "resume": resume,
+                }
             )
     return jobs
 
@@ -172,7 +191,9 @@ def run_job(job, epochs, imgsz, gpu_id, dry_run, nice=None, gpu_mem_frac=None):
     Returns True on success (or in dry-run mode), False if the subprocess failed.
     """
     version = yolo_version(job["name"])
-    cmd = build_command(job["model_yaml"], job["data_yaml"], job["outname"], epochs, imgsz, version, nice, gpu_mem_frac)
+    cmd = build_command(
+        job["model_yaml"], job["data_yaml"], job["outname"], epochs, imgsz, version, nice, gpu_mem_frac, job["resume"]
+    )
     tag = f"{job['name']} ({job['dataset_name']})"
     print(f"[GPU {gpu_id}] démarre {tag}: {' '.join(cmd)}")
     if dry_run:
@@ -183,7 +204,7 @@ def run_job(job, epochs, imgsz, gpu_id, dry_run, nice=None, gpu_mem_frac=None):
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)  # restrict this subprocess to a single physical GPU
 
-    with open(log_path, "w") as log_file:
+    with open(log_path, "a" if job["resume"] else "w") as log_file:
         result = subprocess.run(cmd, cwd=REPO_ROOT, env=env, stdout=log_file, stderr=subprocess.STDOUT)
 
     ok = result.returncode == 0

@@ -49,3 +49,4 @@ psutil>=5.8.0
 requests>=2.23.0
 scipy>=1.4.1
 ultralytics-thop>=2.0.18
+gdown>=5.0.0

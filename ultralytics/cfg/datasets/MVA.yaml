@@ -1,0 +1,39 @@
+# MVA2023 Small Object Detection for Birds dataset (mva2023_sod4bird) — single class: bird
+# Example usage: python train.py -data ultralytics/cfg/datasets/MVA.yaml ...
+# parent
+# ├── ultralytics
+# └── datasets
+#     └── MVA ← downloads here
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: MVA # dataset root dir
+train: train/images # train images (relative to 'path')
+val: valid/images # val images (relative to 'path')
+test: valid/images # test images (optional)
+
+# Classes
+names:
+  0: bird
+
+# Download script/URL (optional) ---------------------------------------------------------------------------------------
+# Fetches the zipped dataset from its Google Drive share link (must be set to "Anyone with the link") -- works
+# from any machine with internet access (Colab, this Mac, a rented GPU box, ...), no Drive mount required.
+# Uses `gdown` rather than Ultralytics' own downloader: this file is ~6 GB, past the size where Drive serves a
+# "can't scan for viruses" confirmation page that Ultralytics' gdrive handling doesn't negotiate but gdown does.
+download: |
+  import zipfile
+  from pathlib import Path
+
+  import gdown
+
+  dir = Path(yaml["path"]).resolve()  # datasets/MVA
+  zip_path = dir.parent / "mva2023_sod4bird_dataset.zip"
+  gdown.download(id="1Jt1CzdaqyHm7Ipd9oAFYxDLBfgJ6EQyY", output=str(zip_path), quiet=False, fuzzy=True)
+  with zipfile.ZipFile(zip_path) as zf:
+      zf.extractall(dir.parent)
+  zip_path.unlink()
+  # si le zip contient un dossier racine différent de "MVA" (ex: "mva2023_sod4bird_dataset"), on le renomme
+  if not dir.exists():
+      candidates = [p for p in dir.parent.iterdir() if p.is_dir() and p.name not in {"MVA", "__MACOSX"}]
+      if len(candidates) == 1:
+          candidates[0].rename(dir)
