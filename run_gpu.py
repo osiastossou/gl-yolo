@@ -108,6 +108,7 @@ def build_command(model_yaml, data_yaml, outname, epochs, imgsz, version, nice=N
         cmd += ["nice", "-n", str(nice)]  # lower CPU scheduling priority: yield to other processes
     cmd += [
         sys.executable,
+        "-u",  # unbuffered stdout/stderr: log files fill in real time instead of only on flush/exit
         str(TRAIN_SCRIPT),
         "-v", str(version),
         "-imgsz", str(imgsz),
