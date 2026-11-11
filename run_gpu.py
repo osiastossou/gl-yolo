@@ -27,6 +27,8 @@ Example:
     python run_gpu.py -epochs 200 -imgsz 1280 --gpu-mem-frac 0.5 # cap VRAM per run on a shared GPU
     python run_gpu.py -epochs 200 -imgsz 1280 --dry-run          # print the commands only
     python run_gpu.py -epochs 200 -imgsz 1280 --no-zip           # skip the final zip
+    python run_gpu.py -epochs 200 -imgsz 1280 --datasets MVA     # only one dataset's 8 architectures
+    python run_gpu.py -epochs 200 -imgsz 1280 --models Y11,Y12,Y11T  # only these architectures, every selected dataset
 """
 
 import argparse
@@ -338,6 +340,12 @@ if __name__ == "__main__":
         "--datasets", type=str, default=None,
         help="Filtre par dataset_name séparés par des virgules (ex: 'DT' ou 'DT,VD'). Défaut: tous.",
     )
+    parser.add_argument(
+        "--models", type=str, default=None,
+        help="Filtre par préfixe de modèle séparés par des virgules (ex: 'Y11,Y12,Y11T' pour prioriser les "
+        "baselines + TOSA). Préfixes valides: Y11, Y12, Y11GL, Y11GLCCP, Y11CCP, Y11SCC, Y11T, Y11COMBO. "
+        "Défaut: tous.",
+    )
     args = parser.parse_args()
 
     gpu_ids = [int(g) for g in args.gpus.split(",")] if args.gpus else detect_free_gpus(args.max_gpu_util, args.min_free_mem_mb)
@@ -350,6 +358,14 @@ if __name__ == "__main__":
         wanted = set(args.datasets.split(","))
         sweep = [d for d in MODEL_SWEEP if d["dataset_name"] in wanted]
         print(f"Datasets sélectionnés: {[d['dataset_name'] for d in sweep]}")
+
+    if args.models:
+        wanted_models = set(args.models.split(","))
+        sweep = [
+            {**d, "folder_model": {n: y for n, y in d["folder_model"].items() if n.split("-")[0] in wanted_models}}
+            for d in sweep
+        ]
+        print(f"Modèles sélectionnés: {sorted(wanted_models)}")
 
     failed = run_sweep(
         sweep,
