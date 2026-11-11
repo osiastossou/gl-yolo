@@ -152,6 +152,7 @@ dmypy.json
 /datasets
 runs/
 logs/
+analysis/
 wandb/
 .DS_Store
 
