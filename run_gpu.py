@@ -163,12 +163,30 @@ def detect_free_gpus(max_util=20, min_free_mb=2048):
     return [i for i, _, _ in free]
 
 
-def collect_jobs(sweep, imgsz, skip_existing):
+def _epochs_done(outname):
+    """Read the last epoch recorded in <outname>/results.csv, or 0 if there isn't one yet.
+
+    `epoch` is 0-indexed in results.csv, so the count of completed epochs is that value + 1.
+    """
+    results_csv = REPO_ROOT / outname / "results.csv"
+    if not results_csv.exists():
+        return 0
+    try:
+        last_line = results_csv.read_text().strip().splitlines()[-1]
+        return int(float(last_line.split(",")[0])) + 1
+    except (IndexError, ValueError):
+        return 0
+
+
+def collect_jobs(sweep, imgsz, epochs, skip_existing):
     """Flatten MODEL_SWEEP into a job list, skipping finished runs and resuming interrupted ones.
 
-    A run whose `last.pt` exists but not `best.pt` was cut short mid-training (e.g. a Colab
-    session disconnect) -- it's queued with `resume=True` to continue from that checkpoint
-    instead of silently restarting from epoch 0 and throwing away everything already trained.
+    A run only counts as finished when results.csv shows it actually reached `epochs` --
+    `best.pt` alone isn't proof of that: Ultralytics (re)writes it the first time validation
+    improves, which can happen long before training reaches its target epoch count, e.g. if the
+    job got cut short (OOM, Colab disconnect) after only a fraction of the run. Anything short
+    of `epochs` is queued with `resume=True` (as long as `last.pt` exists) to continue from that
+    checkpoint instead of either silently restarting from epoch 0 or being skipped forever.
     """
     jobs = []
     for dataset in sweep:
@@ -180,14 +198,14 @@ def collect_jobs(sweep, imgsz, skip_existing):
 
             outname = f"runs/{name}{imgsz}"
             weights_dir = REPO_ROOT / outname / "weights"
-            best_weights = weights_dir / "best.pt"
-            if skip_existing and best_weights.exists():
-                print(f"[skip] {name}: {best_weights} existe déjà.")
+            done = _epochs_done(outname)
+            if skip_existing and done >= epochs:
+                print(f"[skip] {name}: {done}/{epochs} epochs déjà faites (results.csv).")
                 continue
 
             resume = skip_existing and (weights_dir / "last.pt").exists()
             if resume:
-                print(f"[resume] {name}: reprise depuis {weights_dir / 'last.pt'}.")
+                print(f"[resume] {name}: {done}/{epochs} epochs faites, reprise depuis {weights_dir / 'last.pt'}.")
 
             jobs.append(
                 {
@@ -242,14 +260,14 @@ def run_sweep(sweep, epochs, imgsz, gpu_ids, skip_existing=True, dry_run=False, 
         imgsz: Image size per run.
         gpu_ids: List of physical GPU indices to use, e.g. [0, 1, 2, 3]. A single
             entry (e.g. [0], the CPU/MPS default) just runs everything sequentially.
-        skip_existing: Skip a run if `runs/<name><imgsz>/weights/best.pt` already exists
+        skip_existing: Skip a run if its results.csv already shows `epochs` completed epochs
             (lets you resume an interrupted sweep without redoing finished runs).
         dry_run: Print the commands instead of executing them.
 
     Returns:
         List of names whose run failed (non-zero exit code).
     """
-    jobs = collect_jobs(sweep, imgsz, skip_existing)
+    jobs = collect_jobs(sweep, imgsz, epochs, skip_existing)
     if not jobs:
         print("Rien à exécuter.")
         return []
