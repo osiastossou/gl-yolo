@@ -31,6 +31,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
+import torch
 
 from run_gpu import MODEL_SWEEP
 from ultralytics import YOLO
@@ -41,6 +42,15 @@ DATASET_YAML = {d["dataset_name"]: d["yaml"] for d in MODEL_SWEEP}
 
 # "Y11T-MVA1280" -> ("Y11T", "MVA", 1280)
 NAME_RE = re.compile(r"^([A-Za-z0-9]+?)-([A-Za-z]+)(\d+)$")
+
+
+def get_device():
+    """Pick the best available device: CUDA > MPS (Apple Silicon) > CPU (mirrors train.py's get_device)."""
+    if torch.cuda.is_available():
+        return 0
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def parse_run_name(folder_name):
@@ -130,12 +140,17 @@ def main():
     parser.add_argument("--datasets", type=str, default=None, help="Filtre dataset, ex: 'MVA' ou 'MVA,DT'")
     parser.add_argument("--models", type=str, default=None, help="Filtre modèle, ex: 'Y11,Y12,Y11T'")
     parser.add_argument("--split", type=str, default="val", choices=["test", "val"], help="Split à évaluer (défaut: val)")
-    parser.add_argument("--device", type=str, default="0", help="Device ultralytics ('0', 'cpu', 'mps', ...). Défaut: '0'")
+    parser.add_argument(
+        "--device", type=str, default=None,
+        help="Device ultralytics ('0', 'cpu', 'mps', ...). Défaut: auto-détection (CUDA > MPS > CPU).",
+    )
     parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie (défaut: analysis)")
     args = parser.parse_args()
 
     datasets = set(args.datasets.split(",")) if args.datasets else None
     models = set(args.models.split(",")) if args.models else None
+    device = args.device if args.device is not None else get_device()
+    print(f"Device: {device}")
 
     runs = find_runs(RUNS_DIR, datasets, models)
     if not runs:
@@ -145,7 +160,7 @@ def main():
     outdir = REPO_ROOT / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
 
-    rows = [evaluate(r, args.split, args.device, outdir / f"eval_{args.split}_runs") for r in runs]
+    rows = [evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs") for r in runs]
     df = pd.DataFrame(rows)
     pd.set_option("display.float_format", lambda x: f"{x:.4f}")
     print("\n" + df.to_string(index=False))
