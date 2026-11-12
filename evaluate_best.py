@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-"""Final evaluation of every best.pt on the held-out test split, with accuracy + FPS.
+"""Final evaluation of every best.pt on a fixed split, with accuracy + FPS.
 
-results.csv (see analyze_runs.py) only has per-epoch metrics on the *val* split
-recorded during training, and never records speed. This script finds every
+results.csv (see analyze_runs.py) has per-epoch metrics recorded during
+training, but never records speed. This script finds every
 runs/<name><imgsz>/weights/best.pt (optionally filtered by --datasets/--models),
-and for each one runs model.val(split="test", batch=1) to get:
-  - precision / recall / mAP50 / mAP50-95 on the real test split
+and for each one runs model.val(batch=1) to get, in one pass over the same
+split for every architecture:
+  - precision / recall / mAP50 / mAP50-95
   - per-image speed (preprocess/inference/postprocess, batch=1 so it's a true
     per-image latency, not amortized over a batch) converted to FPS
 
-Note on MVA: MVA.yaml points "test" and "val" at the same folder (valid/images),
-so for MVA this re-confirms the val-split accuracy already in results.csv --
-but it is still the only place FPS gets computed. For DT/VD, "test" is a
-genuinely separate, held-out split from training's "val".
+Default split is "val" (consistent across MVA/DT/VD, and the only split with
+public labels for DOTA -- its official "test" is submission-only, no local
+ground truth). Pass --split test to evaluate on the held-out test split
+instead (works for MVA and VisDrone's test-dev, not for DOTA).
 
 Examples:
-    python evaluate_best.py                                   # every best.pt found
+    python evaluate_best.py                                   # every best.pt found, on val
     python evaluate_best.py --datasets MVA --models Y11,Y12,Y11T
     python evaluate_best.py --device cpu                       # force CPU (e.g. on a Mac without CUDA)
-    python evaluate_best.py --split val                        # evaluate val instead of test
+    python evaluate_best.py --split test                       # evaluate on test instead of val
 """
 
 import argparse
@@ -102,14 +103,14 @@ def evaluate(run, split, device, project_dir):
     }
 
 
-def plot_comparison(df, outdir):
+def plot_comparison(df, outdir, split):
     for dataset in sorted(df["dataset"].unique()):
         sub = df[df["dataset"] == dataset].sort_values("model")
         fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
         bars = axes[0].bar(sub["model"], sub["mAP50-95"], color="#2E86AB")
         axes[0].bar_label(bars, fmt="%.3f")
-        axes[0].set_title(f"mAP50-95 (test) — {dataset}")
+        axes[0].set_title(f"mAP50-95 ({split}) — {dataset}")
         axes[0].grid(axis="y", alpha=0.3)
 
         bars2 = axes[1].bar(sub["model"], sub["FPS_inference"], color="#E08E45")
@@ -118,7 +119,7 @@ def plot_comparison(df, outdir):
         axes[1].grid(axis="y", alpha=0.3)
 
         fig.tight_layout()
-        out = outdir / f"test_eval_{dataset}.png"
+        out = outdir / f"eval_{split}_{dataset}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -128,7 +129,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--datasets", type=str, default=None, help="Filtre dataset, ex: 'MVA' ou 'MVA,DT'")
     parser.add_argument("--models", type=str, default=None, help="Filtre modèle, ex: 'Y11,Y12,Y11T'")
-    parser.add_argument("--split", type=str, default="test", choices=["test", "val"], help="Split à évaluer (défaut: test)")
+    parser.add_argument("--split", type=str, default="val", choices=["test", "val"], help="Split à évaluer (défaut: val)")
     parser.add_argument("--device", type=str, default="0", help="Device ultralytics ('0', 'cpu', 'mps', ...). Défaut: '0'")
     parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie (défaut: analysis)")
     args = parser.parse_args()
@@ -144,16 +145,16 @@ def main():
     outdir = REPO_ROOT / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
 
-    rows = [evaluate(r, args.split, args.device, outdir / "test_eval_runs") for r in runs]
+    rows = [evaluate(r, args.split, args.device, outdir / f"eval_{args.split}_runs") for r in runs]
     df = pd.DataFrame(rows)
     pd.set_option("display.float_format", lambda x: f"{x:.4f}")
     print("\n" + df.to_string(index=False))
 
-    csv_path = outdir / "test_eval_summary.csv"
+    csv_path = outdir / f"eval_{args.split}_summary.csv"
     df.to_csv(csv_path, index=False)
     print(f"\nRésumé -> {csv_path}")
 
-    plot_comparison(df, outdir)
+    plot_comparison(df, outdir, args.split)
 
 
 if __name__ == "__main__":
