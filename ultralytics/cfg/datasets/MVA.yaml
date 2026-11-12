@@ -30,8 +30,14 @@ download: |
       unzip=True,
       delete=True,
   )
-  # le zip contient un dossier racine différent de "MVA" ("mva2023_sod4bird_dataset"), on le renomme
+  # le zip contient un dossier racine différent de "MVA" ("mva2023_sod4bird_dataset"), on le renomme.
+  # on cible ce nom précis plutôt que "l'unique autre dossier de datasets/" -- ce dernier se casse dès
+  # qu'un autre dataset (VisDrone, DOTAv1.5, ...) est déjà présent à côté.
   if not dir.exists():
-      candidates = [p for p in dir.parent.iterdir() if p.is_dir() and p.name not in {"MVA", "__MACOSX"}]
-      if len(candidates) == 1:
-          candidates[0].rename(dir)
+      extracted = dir.parent / "mva2023_sod4bird_dataset"
+      if extracted.exists():
+          extracted.rename(dir)
+      else:
+          candidates = [p for p in dir.parent.iterdir() if p.is_dir() and p.name not in {"MVA", "__MACOSX"}]
+          if len(candidates) == 1:
+              candidates[0].rename(dir)
