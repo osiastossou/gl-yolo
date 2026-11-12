@@ -4,7 +4,8 @@
 Reads every runs/<name><imgsz>/results.csv produced by train.py (via run_gpu.py),
 parses the architecture/dataset out of the folder name (e.g. "Y11T-MVA1280" ->
 model=Y11T, dataset=MVA, imgsz=1280), and renders loss curves, metric curves,
-and a final-epoch comparison bar chart per dataset, plus a text summary table.
+cumulative/per-epoch training time, and a final-epoch comparison bar chart per
+dataset, plus a text summary table (with total time and avg min/epoch).
 
 Examples:
     python analyze_runs.py                              # all runs found under runs/
@@ -124,6 +125,35 @@ def plot_comparison_bars(runs, outdir, metric="metrics/mAP50-95(B)", label="mAP5
         print(f"  -> {out}")
 
 
+def plot_time(runs, outdir):
+    for dataset in sorted({r["dataset"] for r in runs.values()}):
+        relevant = {f: r for f, r in runs.items() if r["dataset"] == dataset and "time" in r["df"].columns}
+        if not relevant:
+            continue
+        fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+        for folder, r in sorted(relevant.items()):
+            df = r["df"]
+            axes[0].plot(df["epoch"], df["time"] / 3600, label=r["model"])
+            per_epoch_min = df["time"].diff().fillna(df["time"].iloc[0]) / 60
+            axes[1].plot(df["epoch"], per_epoch_min, label=r["model"])
+        axes[0].set_title(f"Temps cumulé — {dataset}")
+        axes[0].set_xlabel("epoch")
+        axes[0].set_ylabel("heures")
+        axes[0].grid(alpha=0.3)
+        axes[1].set_title(f"Durée par epoch — {dataset}")
+        axes[1].set_xlabel("epoch")
+        axes[1].set_ylabel("minutes")
+        axes[1].grid(alpha=0.3)
+        handles, labels = axes[0].get_legend_handles_labels()
+        if labels:
+            fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 6))
+        fig.tight_layout(rect=[0, 0.1, 1, 1])
+        out = outdir / f"time_{dataset}.png"
+        fig.savefig(out, dpi=130)
+        plt.close(fig)
+        print(f"  -> {out}")
+
+
 def build_summary(runs):
     rows = []
     for folder, r in sorted(runs.items()):
@@ -132,19 +162,22 @@ def build_summary(runs):
             best_idx = df["metrics/mAP50-95(B)"].idxmax()
         else:
             best_idx = df.index[-1]
-        rows.append(
-            {
-                "run": folder,
-                "model": r["model"],
-                "dataset": r["dataset"],
-                "epochs_done": int(df["epoch"].iloc[-1]) + 1,
-                "best_epoch": int(df["epoch"].iloc[best_idx]) + 1,
-                "precision": df["metrics/precision(B)"].iloc[best_idx],
-                "recall": df["metrics/recall(B)"].iloc[best_idx],
-                "mAP50": df["metrics/mAP50(B)"].iloc[best_idx],
-                "mAP50-95": df["metrics/mAP50-95(B)"].iloc[best_idx],
-            }
-        )
+        epochs_done = int(df["epoch"].iloc[-1]) + 1
+        row = {
+            "run": folder,
+            "model": r["model"],
+            "dataset": r["dataset"],
+            "epochs_done": epochs_done,
+            "best_epoch": int(df["epoch"].iloc[best_idx]) + 1,
+            "precision": df["metrics/precision(B)"].iloc[best_idx],
+            "recall": df["metrics/recall(B)"].iloc[best_idx],
+            "mAP50": df["metrics/mAP50(B)"].iloc[best_idx],
+            "mAP50-95": df["metrics/mAP50-95(B)"].iloc[best_idx],
+        }
+        if "time" in df.columns:
+            row["total_time_h"] = df["time"].iloc[-1] / 3600
+            row["min_per_epoch"] = (df["time"].iloc[-1] / epochs_done) / 60
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -171,6 +204,7 @@ def render(args):
     print("\nGraphiques:")
     plot_grid(runs, outdir, LOSSES, "Losses", "losses", ncols=3)
     plot_grid(runs, outdir, METRICS, "Metrics", "metrics", ncols=2)
+    plot_time(runs, outdir)
     plot_comparison_bars(runs, outdir)
 
 
