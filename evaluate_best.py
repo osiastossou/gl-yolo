@@ -20,6 +20,7 @@ Examples:
     python evaluate_best.py --datasets MVA --models Y11,Y12,Y11T
     python evaluate_best.py --device cpu                       # force CPU (e.g. on a Mac without CUDA)
     python evaluate_best.py --split test                       # evaluate on test instead of val
+    python evaluate_best.py --plot-only                        # re-plot from an existing eval_<split>_summary.csv, no GPU needed
 """
 
 import argparse
@@ -113,23 +114,68 @@ def evaluate(run, split, device, project_dir):
     }
 
 
-def plot_comparison(df, outdir, split):
+def _grouped_bars(ax, x, series, fmt):
+    """Plot len(series) bars per x position, side by side, each bar_label'd."""
+    n = len(series)
+    width = 0.8 / n
+    for i, (col, label, color) in enumerate(series):
+        offset = (i - (n - 1) / 2) * width
+        bars = ax.bar([xi + offset for xi in x], col, width, label=label, color=color)
+        ax.bar_label(bars, fmt=fmt, fontsize=8)
+
+
+def plot_grouped(df, outdir, split):
+    """3 grouped-bar PNGs per dataset: P/R/F1 together, mAP50/mAP50-95 together, FPS together."""
     for dataset in sorted(df["dataset"].unique()):
         sub = df[df["dataset"] == dataset].sort_values("model")
-        fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+        models = sub["model"].tolist()
+        x = range(len(models))
 
-        bars = axes[0].bar(sub["model"], sub["mAP50-95"], color="#2E86AB")
-        axes[0].bar_label(bars, fmt="%.3f")
-        axes[0].set_title(f"mAP50-95 ({split}) — {dataset}")
-        axes[0].grid(axis="y", alpha=0.3)
-
-        bars2 = axes[1].bar(sub["model"], sub["FPS_inference"], color="#E08E45")
-        axes[1].bar_label(bars2, fmt="%.1f")
-        axes[1].set_title(f"FPS (inference, batch=1) — {dataset}")
-        axes[1].grid(axis="y", alpha=0.3)
-
+        fig, ax = plt.subplots(figsize=(max(7, len(models) * 1.8), 5))
+        _grouped_bars(ax, x, [
+            (sub["precision"], "Precision", "#2E86AB"),
+            (sub["recall"], "Recall", "#E08E45"),
+            (sub["F1"], "F1", "#6BBF59"),
+        ], fmt="%.3f")
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(models)
+        ax.set_title(f"Precision / Recall / F1 ({split}) — {dataset}")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_{split}_{dataset}.png"
+        out = outdir / f"eval_PRF1_{split}_{dataset}.png"
+        fig.savefig(out, dpi=130)
+        plt.close(fig)
+        print(f"  -> {out}")
+
+        fig, ax = plt.subplots(figsize=(max(7, len(models) * 1.8), 5))
+        _grouped_bars(ax, x, [
+            (sub["mAP50"], "mAP50", "#2E86AB"),
+            (sub["mAP50-95"], "mAP50-95", "#E08E45"),
+        ], fmt="%.3f")
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(models)
+        ax.set_title(f"mAP50 / mAP50-95 ({split}) — {dataset}")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+        fig.tight_layout()
+        out = outdir / f"eval_mAP_{split}_{dataset}.png"
+        fig.savefig(out, dpi=130)
+        plt.close(fig)
+        print(f"  -> {out}")
+
+        fig, ax = plt.subplots(figsize=(max(7, len(models) * 1.8), 5))
+        _grouped_bars(ax, x, [
+            (sub["FPS_inference"], "FPS (inférence)", "#2E86AB"),
+            (sub["FPS_total"], "FPS (pipeline total)", "#E08E45"),
+        ], fmt="%.1f")
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(models)
+        ax.set_title(f"FPS, batch=1 ({split}) — {dataset}")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+        fig.tight_layout()
+        out = outdir / f"eval_FPS_{split}_{dataset}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -145,31 +191,52 @@ def main():
         help="Device ultralytics ('0', 'cpu', 'mps', ...). Défaut: auto-détection (CUDA > MPS > CPU).",
     )
     parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie (défaut: analysis)")
+    parser.add_argument(
+        "--plot-only", action="store_true",
+        help="Ne ré-évalue rien : relit analysis/eval_<split>_summary.csv déjà généré et regénère juste les graphiques (pas besoin de GPU)",
+    )
     args = parser.parse_args()
 
     datasets = set(args.datasets.split(",")) if args.datasets else None
     models = set(args.models.split(",")) if args.models else None
-    device = args.device if args.device is not None else get_device()
-    print(f"Device: {device}")
-
-    runs = find_runs(RUNS_DIR, datasets, models)
-    if not runs:
-        print("Aucun best.pt trouvé sous runs/ (vérifie --datasets/--models, et que l'entraînement a déjà sauvegardé un best.pt).")
-        return
 
     outdir = REPO_ROOT / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
-
-    rows = [evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs") for r in runs]
-    df = pd.DataFrame(rows)
-    pd.set_option("display.float_format", lambda x: f"{x:.4f}")
-    print("\n" + df.to_string(index=False))
-
     csv_path = outdir / f"eval_{args.split}_summary.csv"
-    df.to_csv(csv_path, index=False)
-    print(f"\nRésumé -> {csv_path}")
 
-    plot_comparison(df, outdir, args.split)
+    if args.plot_only:
+        if not csv_path.exists():
+            print(f"Aucun résumé trouvé: {csv_path} (lance d'abord evaluate_best.py sans --plot-only pour le générer).")
+            return
+        df = pd.read_csv(csv_path)
+        if datasets:
+            df = df[df["dataset"].isin(datasets)]
+        if models:
+            df = df[df["model"].isin(models)]
+        if df.empty:
+            print("Aucune ligne après filtre --datasets/--models.")
+            return
+    else:
+        device = args.device if args.device is not None else get_device()
+        print(f"Device: {device}")
+
+        runs = find_runs(RUNS_DIR, datasets, models)
+        if not runs:
+            print("Aucun best.pt trouvé sous runs/ (vérifie --datasets/--models, et que l'entraînement a déjà sauvegardé un best.pt).")
+            return
+
+        rows = [evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs") for r in runs]
+        df = pd.DataFrame(rows)
+        pd.set_option("display.float_format", lambda x: f"{x:.4f}")
+        print("\n" + df.to_string(index=False))
+
+        df.to_csv(csv_path, index=False)
+        print(f"\nRésumé -> {csv_path}")
+
+    df["F1"] = 2 * df["precision"] * df["recall"] / (df["precision"] + df["recall"])
+
+    print("\nGraphiques:")
+    plot_grouped(df, outdir, args.split)
 
 
 if __name__ == "__main__":

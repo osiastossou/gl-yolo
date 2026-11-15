@@ -57,6 +57,7 @@ MODEL_SWEEP = [
         "folder_model": {
             "Y11-MVA": "ultralytics/cfg/models/11/yolo11.yaml",
             "Y12-MVA": "ultralytics/cfg/models/12/yolo12.yaml",
+            "Y11NOSPPF-MVA": "ultralytics/cfg/models/11/yolo11-no-sppf.yaml",
             "Y11GL-MVA": "ultralytics/cfg/models/11/yolo11-sppf-gl.yaml",
             "Y11GLCCP-MVA": "ultralytics/cfg/models/11/yolo11-gl-ccp.yaml",
             "Y11CCP-MVA": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
@@ -67,10 +68,11 @@ MODEL_SWEEP = [
     },
     {
         "dataset_name": "DT",
-        "yaml": "ultralytics/cfg/datasets/DOTAv1.5.yaml",
+        "yaml": "ultralytics/cfg/datasets/DOTAv1.5-split.yaml",
         "folder_model": {
             "Y11-DT": "ultralytics/cfg/models/11/yolo11.yaml",
             "Y12-DT": "ultralytics/cfg/models/12/yolo12.yaml",
+            "Y11NOSPPF-DT": "ultralytics/cfg/models/11/yolo11-no-sppf.yaml",
             "Y11GL-DT": "ultralytics/cfg/models/11/yolo11-sppf-gl.yaml",
             "Y11GLCCP-DT": "ultralytics/cfg/models/11/yolo11-gl-ccp.yaml",
             "Y11CCP-DT": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
@@ -85,6 +87,7 @@ MODEL_SWEEP = [
         "folder_model": {
             "Y11-VD": "ultralytics/cfg/models/11/yolo11.yaml",
             "Y12-VD": "ultralytics/cfg/models/12/yolo12.yaml",
+            "Y11NOSPPF-VD": "ultralytics/cfg/models/11/yolo11-no-sppf.yaml",
             "Y11GL-VD": "ultralytics/cfg/models/11/yolo11-sppf-gl.yaml",
             "Y11GLCCP-VD": "ultralytics/cfg/models/11/yolo11-gl-ccp.yaml",
             "Y11CCP-VD": "ultralytics/cfg/models/11/yolo11-ccp.yaml",
@@ -362,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--models", type=str, default=None,
         help="Filtre par préfixe de modèle séparés par des virgules (ex: 'Y11,Y12,Y11T' pour prioriser les "
-        "baselines + TOSA). Préfixes valides: Y11, Y12, Y11GL, Y11GLCCP, Y11CCP, Y11SCC, Y11T, Y11COMBO. "
+        "baselines + TOSA). Préfixes valides: Y11, Y12, Y11NOSPPF, Y11GL, Y11GLCCP, Y11CCP, Y11SCC, Y11T, Y11COMBO. "
         "Défaut: tous.",
     )
     args = parser.parse_args()

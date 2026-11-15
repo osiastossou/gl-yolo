@@ -9,6 +9,7 @@ dataset, plus a text summary table (with total time and avg min/epoch).
 
 Examples:
     python analyze_runs.py                              # all runs found under runs/
+    python analyze_runs.py --runs-dir runs-colab          # analyze a different runs/ folder
     python analyze_runs.py --datasets MVA                # only MVA runs
     python analyze_runs.py --models Y11,Y12,Y11T          # only these architectures
     python analyze_runs.py --outdir analysis              # where to save the PNGs/summary.csv
@@ -27,7 +28,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parent
-RUNS_DIR = REPO_ROOT / "runs"
 
 METRICS = {
     "metrics/precision(B)": "Precision",
@@ -56,6 +56,30 @@ def parse_run_name(folder_name):
     return model, dataset, int(imgsz)
 
 
+def fix_resumed_time(df, folder):
+    """Make `time` keep climbing across a resume instead of dropping back to ~0.
+
+    Ultralytics resets its training-time clock to 0 at the start of every (re)launch, so
+    after a `-resume` the appended rows' `time` values start over near 0 -- lower than the
+    last pre-resume row. Left as-is, that reads as a drop in cumulative-time plots and a
+    huge negative spike in per-epoch-duration plots. Fix: whenever `time` drops versus the
+    previous row (a resume boundary), add the cumulative time already elapsed before that
+    point to every row from there on, so the series keeps climbing across the whole run.
+    """
+    time = df["time"].tolist()
+    offset = 0.0
+    fixed = []
+    resumes = 0
+    for i, t in enumerate(time):
+        if i > 0 and t < time[i - 1]:
+            offset += time[i - 1]
+            resumes += 1
+        fixed.append(t + offset)
+    if resumes:
+        print(f"[fix] {folder}: {resumes} reprise(s) détectée(s) dans results.csv, temps cumulé corrigé (+{offset / 3600:.2f}h au total).")
+    df["time"] = fixed
+
+
 def load_runs(runs_dir, datasets=None, models=None):
     runs = {}
     for csv_path in sorted(runs_dir.glob("*/results.csv")):
@@ -69,6 +93,8 @@ def load_runs(runs_dir, datasets=None, models=None):
         df.columns = [c.strip() for c in df.columns]
         if df.empty:
             continue
+        if "time" in df.columns:
+            fix_resumed_time(df, folder)
         runs[folder] = {"model": model, "dataset": dataset, "imgsz": imgsz, "df": df}
     return runs
 
@@ -79,19 +105,50 @@ def _legend_outside(fig, axes):
         fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 6))
 
 
+def _label_curve_ends(ax, ends, label_x):
+    """Direct end-of-curve labels (model + final value), nudged apart vertically so close
+    curves stay readable instead of overlapping -- this is what makes the gap between
+    models visible at a glance, instead of having to eyeball line colors against the legend.
+    """
+    ends = sorted(ends, key=lambda e: e[1])  # ascending by final value
+    ymin, ymax = ax.get_ylim()
+    min_gap = (ymax - ymin) * 0.07 or 0.01
+    prev_y = None
+    max_label_y = ymax
+    for x, y, model, color in ends:
+        y_label = y if prev_y is None else max(y, prev_y + min_gap)
+        prev_y = y_label
+        max_label_y = max(max_label_y, y_label)
+        ax.annotate(
+            f"{model} {y:.3f}", xy=(x, y), xytext=(label_x, y_label),
+            textcoords="data", va="center", fontsize=7, color=color,
+            arrowprops=dict(arrowstyle="-", color=color, lw=0.6, alpha=0.5) if abs(y_label - y) > min_gap / 2 else None,
+        )
+    if max_label_y > ymax:
+        ax.set_ylim(top=max_label_y + min_gap * 0.5)
+
+
 def plot_grid(runs, outdir, columns, suptitle_prefix, filename_prefix, ncols):
     for dataset in sorted({r["dataset"] for r in runs.values()}):
         nrows = -(-len(columns) // ncols)  # ceil
-        fig, axes = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4 * nrows), sharex=True)
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6.3 * ncols, 4 * nrows), sharex=True)
         fig.suptitle(f"{suptitle_prefix} — {dataset}")
         for ax, (col, label) in zip(axes.flat, columns.items()):
+            ends = []
             for folder, r in sorted(runs.items()):
                 if r["dataset"] != dataset or col not in r["df"].columns:
                     continue
-                ax.plot(r["df"]["epoch"], r["df"][col], label=r["model"])
+                df = r["df"]
+                (line,) = ax.plot(df["epoch"], df[col], label=r["model"], linewidth=1.6)
+                ends.append((df["epoch"].iloc[-1], df[col].iloc[-1], r["model"], line.get_color()))
             ax.set_title(label)
             ax.set_xlabel("epoch")
             ax.grid(alpha=0.3)
+            if ends:
+                xmax = max(e[0] for e in ends)
+                pad = max(2, xmax * 0.22)
+                ax.set_xlim(right=xmax + pad)
+                _label_curve_ends(ax, ends, label_x=xmax + pad * 0.35)
         for ax in axes.flat[len(columns):]:
             ax.axis("off")
         _legend_outside(fig, axes)
@@ -185,12 +242,16 @@ def render(args):
     outdir = REPO_ROOT / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
 
+    runs_dir = Path(args.runs_dir)
+    if not runs_dir.is_absolute():
+        runs_dir = REPO_ROOT / runs_dir
+
     datasets = set(args.datasets.split(",")) if args.datasets else None
     models = set(args.models.split(",")) if args.models else None
 
-    runs = load_runs(RUNS_DIR, datasets, models)
+    runs = load_runs(runs_dir, datasets, models)
     if not runs:
-        print("Aucun run trouvé sous runs/ (vérifie --datasets/--models, et que results.csv a déjà au moins une ligne).")
+        print(f"Aucun run trouvé sous {runs_dir}/ (vérifie --runs-dir/--datasets/--models, et que results.csv a déjà au moins une ligne).")
         return
 
     print(f"{len(runs)} run(s): {', '.join(sorted(runs))}\n")
@@ -210,6 +271,7 @@ def render(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--runs-dir", type=str, default="runs", help="Dossier contenant les <name><imgsz>/results.csv à analyser (défaut: runs)")
     parser.add_argument("--datasets", type=str, default=None, help="Filtre dataset, ex: 'MVA' ou 'MVA,DT'")
     parser.add_argument("--models", type=str, default=None, help="Filtre modèle, ex: 'Y11,Y12,Y11T'")
     parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie des graphiques (défaut: analysis)")
