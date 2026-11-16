@@ -21,6 +21,7 @@ Examples:
     python evaluate_best.py --device cpu                       # force CPU (e.g. on a Mac without CUDA)
     python evaluate_best.py --split test                       # evaluate on test instead of val
     python evaluate_best.py --plot-only                        # re-plot from an existing eval_<split>_summary.csv, no GPU needed
+    python evaluate_best.py --runs-dir runs-vincent            # evaluate every best.pt under a different runs/ folder
 """
 
 import argparse
@@ -38,7 +39,6 @@ from run_gpu import MODEL_SWEEP
 from ultralytics import YOLO
 
 REPO_ROOT = Path(__file__).resolve().parent
-RUNS_DIR = REPO_ROOT / "runs"
 DATASET_YAML = {d["dataset_name"]: d["yaml"] for d in MODEL_SWEEP}
 
 # "Y11T-MVA1280" -> ("Y11T", "MVA", 1280)
@@ -124,7 +124,7 @@ def _grouped_bars(ax, x, series, fmt):
         ax.bar_label(bars, fmt=fmt, fontsize=8)
 
 
-def plot_grouped(df, outdir, split):
+def plot_grouped(df, outdir, split, suffix=""):
     """3 grouped-bar PNGs per dataset: P/R/F1 together, mAP50/mAP50-95 together, FPS together."""
     for dataset in sorted(df["dataset"].unique()):
         sub = df[df["dataset"] == dataset].sort_values("model")
@@ -143,7 +143,7 @@ def plot_grouped(df, outdir, split):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_PRF1_{split}_{dataset}.png"
+        out = outdir / f"eval_PRF1_{split}_{dataset}{suffix}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -159,7 +159,7 @@ def plot_grouped(df, outdir, split):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_mAP_{split}_{dataset}.png"
+        out = outdir / f"eval_mAP_{split}_{dataset}{suffix}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -175,7 +175,7 @@ def plot_grouped(df, outdir, split):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_FPS_{split}_{dataset}.png"
+        out = outdir / f"eval_FPS_{split}_{dataset}{suffix}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -192,17 +192,28 @@ def main():
     )
     parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie (défaut: analysis)")
     parser.add_argument(
+        "--runs-dir", type=str, default="runs",
+        help="Dossier contenant les <name><imgsz>/weights/best.pt à évaluer (défaut: runs)",
+    )
+    parser.add_argument(
         "--plot-only", action="store_true",
-        help="Ne ré-évalue rien : relit analysis/eval_<split>_summary.csv déjà généré et regénère juste les graphiques (pas besoin de GPU)",
+        help="Ne ré-évalue rien : relit analysis/eval_<split>_summary[_<runs-dir>].csv déjà généré et regénère juste les graphiques (pas besoin de GPU)",
     )
     args = parser.parse_args()
 
     datasets = set(args.datasets.split(",")) if args.datasets else None
     models = set(args.models.split(",")) if args.models else None
 
+    runs_dir = Path(args.runs_dir)
+    if not runs_dir.is_absolute():
+        runs_dir = REPO_ROOT / runs_dir
+    # suffix output files with the runs-dir name so evaluating an alternate folder (runs-vincent,
+    # runs-colab...) never overwrites the results already computed for runs/
+    suffix = "" if runs_dir.name == "runs" else f"_{runs_dir.name}"
+
     outdir = REPO_ROOT / args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
-    csv_path = outdir / f"eval_{args.split}_summary.csv"
+    csv_path = outdir / f"eval_{args.split}_summary{suffix}.csv"
 
     if args.plot_only:
         if not csv_path.exists():
@@ -220,12 +231,12 @@ def main():
         device = args.device if args.device is not None else get_device()
         print(f"Device: {device}")
 
-        runs = find_runs(RUNS_DIR, datasets, models)
+        runs = find_runs(runs_dir, datasets, models)
         if not runs:
-            print("Aucun best.pt trouvé sous runs/ (vérifie --datasets/--models, et que l'entraînement a déjà sauvegardé un best.pt).")
+            print(f"Aucun best.pt trouvé sous {runs_dir}/ (vérifie --runs-dir/--datasets/--models, et que l'entraînement a déjà sauvegardé un best.pt).")
             return
 
-        rows = [evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs") for r in runs]
+        rows = [evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs{suffix}") for r in runs]
         df = pd.DataFrame(rows)
         pd.set_option("display.float_format", lambda x: f"{x:.4f}")
         print("\n" + df.to_string(index=False))
@@ -236,7 +247,7 @@ def main():
     df["F1"] = 2 * df["precision"] * df["recall"] / (df["precision"] + df["recall"])
 
     print("\nGraphiques:")
-    plot_grouped(df, outdir, args.split)
+    plot_grouped(df, outdir, args.split, suffix)
 
 
 if __name__ == "__main__":
