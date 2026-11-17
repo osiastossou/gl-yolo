@@ -20,10 +20,19 @@ names:
 # share link this used before), works from any machine with internet access, no Drive mount required.
 download: |
   from pathlib import Path
+  from zipfile import is_zipfile
 
   from ultralytics.utils.downloads import safe_download
 
   dir = Path(yaml["path"]).resolve()  # datasets/MVA
+  zip_path = dir.parent / "mva2023_sod4bird_dataset.zip"
+  # safe_download() ne re-télécharge pas si ce fichier existe déjà, sans vérifier qu'il est
+  # complet/valide -- un essai précédent interrompu (session tuée, OOM, Ctrl+C...) laisse un
+  # zip tronqué qui, sinon, fait planter l'extraction en silence (aucune erreur, juste rien
+  # d'extrait) à chaque relance suivante. On le supprime d'abord s'il n'est pas un zip valide.
+  if zip_path.exists() and not is_zipfile(zip_path):
+      zip_path.unlink()
+
   safe_download(
       url="https://huggingface.co/datasets/osiastossou/mva2023-sod4bird/resolve/main/mva2023_sod4bird_dataset.zip",
       dir=dir.parent,
