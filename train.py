@@ -55,7 +55,10 @@ def str2bool(value: str) -> bool:
     raise argparse.ArgumentTypeError(f"Valeur booléenne attendue, reçu: {value!r}")
 
 
-def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False, batch=16, gpu_mem_frac=None):
+def main(
+    modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, resume=False, batch=16, gpu_mem_frac=None,
+    nwd_gain=0.0, nwd_c=12.8,
+):
     """Train (or resume) a YOLO model built from `modelpath`, on `data`, saving under `outname`."""
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     configure_colab_datasets_dir()
@@ -118,6 +121,8 @@ def main(modelpath, data, outname, epochs, imgsz=640, v=11, pretrained=True, res
         box=7.5,
         cls=0.5,
         dfl=1.5,
+        nwd_gain=nwd_gain,
+        nwd_c=nwd_c,
         # ── Sauvegarde & suivi ───────────────────────────────────────────
         save=True,
         save_period=50,  # checkpoint toutes les 50 epochs
@@ -155,6 +160,18 @@ if __name__ == "__main__":
         help="Limite la fraction de VRAM utilisable sur le GPU choisi (0-1), pour ne pas monopoliser une GPU "
         "partagée avec d'autres processus. Défaut: aucune limite.",
     )
+    parser.add_argument(
+        "-nwd-gain", type=float, default=0.0,
+        help="Poids (0-1) du mélange Normalized Wasserstein Distance dans l'assignation TAL et la box loss, "
+        "pour mieux gérer les petits objets (0 = désactivé, comportement identique à avant). Défaut: 0.0.",
+    )
+    parser.add_argument(
+        "-nwd-c", type=float, default=12.8,
+        help="Constante de normalisation NWD -- à baisser pour les datasets à objets très petits (défaut: 12.8).",
+    )
 
     args = parser.parse_args()
-    main(args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume, args.batch, args.gpu_mem_frac)
+    main(
+        args.model, args.data, args.outname, args.epochs, args.imgsz, args.v, args.p, args.resume, args.batch,
+        args.gpu_mem_frac, args.nwd_gain, args.nwd_c,
+    )

@@ -147,6 +147,46 @@ def bbox_iou(
     return iou  # IoU
 
 
+def wasserstein_nwd(box1: torch.Tensor, box2: torch.Tensor, xywh: bool = True, C: float = 12.8, eps: float = 1e-7) -> torch.Tensor:
+    """Calculate the Normalized Wasserstein Distance (NWD) similarity between bounding boxes.
+
+    IoU is numerically unstable for tiny boxes: a 1px localization error on a 4x4 box moves IoU far more than
+    the same error on a 400x400 box, which makes both the TAL assignment metric and the box regression loss
+    noisy for small objects. NWD instead models each box as a 2D Gaussian centered on the box (center
+    `(cx, cy)`, std `(w/2, h/2)`) and turns their Wasserstein-2 distance into a bounded [0, 1] similarity,
+    which degrades smoothly with box size instead of exploding for small ones.
+
+    Args:
+        box1 (torch.Tensor): A tensor representing one or more bounding boxes, with the last dimension being 4.
+        box2 (torch.Tensor): A tensor representing one or more bounding boxes, with the last dimension being 4.
+        xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in (x1, y1,
+            x2, y2) format.
+        C (float, optional): Normalization constant for the exponential -- the empirical average Wasserstein
+            distance (in pixels) at which similarity decays to ~1/e. Smaller datasets with very small average
+            object size (e.g. tiny-bird or tiny-vehicle detection) should use a smaller C.
+        eps (float, optional): A small value to avoid division by zero.
+
+    Returns:
+        (torch.Tensor): NWD similarity values in [0, 1], same broadcast shape as `bbox_iou`.
+
+    References:
+        https://arxiv.org/abs/2110.13389 (A Normalized Gaussian Wasserstein Distance for Tiny Object Detection)
+    """
+    if xywh:
+        cx1, cy1, w1, h1 = box1.chunk(4, -1)
+        cx2, cy2, w2, h2 = box2.chunk(4, -1)
+    else:
+        b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, -1)
+        b2_x1, b2_y1, b2_x2, b2_y2 = box2.chunk(4, -1)
+        cx1, cy1, w1, h1 = (b1_x1 + b1_x2) / 2, (b1_y1 + b1_y2) / 2, b1_x2 - b1_x1, b1_y2 - b1_y1
+        cx2, cy2, w2, h2 = (b2_x1 + b2_x2) / 2, (b2_y1 + b2_y2) / 2, b2_x2 - b2_x1, b2_y2 - b2_y1
+
+    center_dist2 = (cx1 - cx2).pow(2) + (cy1 - cy2).pow(2)
+    size_dist2 = ((w1 - w2) / 2).pow(2) + ((h1 - h2) / 2).pow(2)
+    wasserstein2 = center_dist2 + size_dist2 + eps
+    return torch.exp(-wasserstein2.sqrt() / C)
+
+
 def mask_iou(mask1: torch.Tensor, mask2: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
     """Calculate masks IoU.
 

@@ -14,7 +14,7 @@ from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from ultralytics.utils.torch_utils import autocast
 
-from .metrics import bbox_iou, probiou
+from .metrics import bbox_iou, probiou, wasserstein_nwd
 from .tal import bbox2dist, rbox2dist
 
 
@@ -109,10 +109,19 @@ class DFLoss(nn.Module):
 class BboxLoss(nn.Module):
     """Criterion class for computing training losses for bounding boxes."""
 
-    def __init__(self, reg_max: int = 16):
-        """Initialize the BboxLoss module with regularization maximum and DFL settings."""
+    def __init__(self, reg_max: int = 16, nwd_gain: float = 0.0, nwd_c: float = 12.8):
+        """Initialize the BboxLoss module with regularization maximum and DFL settings.
+
+        Args:
+            reg_max (int, optional): Maximum regularization value for DFL.
+            nwd_gain (float, optional): Blend weight for Normalized Wasserstein Distance into the box loss (0 =
+                pure CIoU, matches prior behavior; see `wasserstein_nwd`'s docstring in `ultralytics/utils/metrics.py`).
+            nwd_c (float, optional): NWD normalization constant, passed through to `wasserstein_nwd`.
+        """
         super().__init__()
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+        self.nwd_gain = nwd_gain
+        self.nwd_c = nwd_c
 
     def forward(
         self,
@@ -129,6 +138,9 @@ class BboxLoss(nn.Module):
         """Compute IoU and DFL losses for bounding boxes."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
         iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+        if self.nwd_gain:
+            nwd = wasserstein_nwd(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, C=self.nwd_c)
+            iou = (1 - self.nwd_gain) * iou + self.nwd_gain * nwd
         loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
         # DFL loss
@@ -349,6 +361,7 @@ class v8DetectionLoss:
 
         self.use_dfl = m.reg_max > 1
 
+        nwd_gain, nwd_c = h.nwd_gain, h.nwd_c
         self.assigner = TaskAlignedAssigner(
             topk=tal_topk,
             num_classes=self.nc,
@@ -356,8 +369,10 @@ class v8DetectionLoss:
             beta=6.0,
             stride=self.stride.tolist(),
             topk2=tal_topk2,
+            nwd_gain=nwd_gain,
+            nwd_c=nwd_c,
         )
-        self.bbox_loss = BboxLoss(m.reg_max).to(device)
+        self.bbox_loss = BboxLoss(m.reg_max, nwd_gain=nwd_gain, nwd_c=nwd_c).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
     def preprocess(self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor) -> torch.Tensor:
