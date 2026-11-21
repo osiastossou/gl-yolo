@@ -44,8 +44,9 @@ LOSSES = {
     "val/dfl_loss": "DFL loss (val)",
 }
 
-# "Y11T-MVA1280" -> ("Y11T", "MVA", 1280)
-NAME_RE = re.compile(r"^([A-Za-z0-9]+?)-([A-Za-z]+)(\d+)$")
+# "Y11T-MVA1280" -> ("Y11T", "MVA", 1280) ; "Y11-NWD-MVA1280" -> ("Y11-NWD", "MVA", 1280)
+# Model group is greedy and allows embedded hyphens, so only the trailing "-Dataset<imgsz>" is anchored.
+NAME_RE = re.compile(r"^(.+)-([A-Za-z]+)(\d+)$")
 
 
 def parse_run_name(folder_name):
