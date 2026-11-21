@@ -220,6 +220,12 @@ def collect_jobs(sweep, imgsz, epochs, skip_existing):
                     "resume": resume,
                 }
             )
+
+    # Finish already-started runs before starting brand-new ones: with one GPU, a fresh run
+    # (epoch 0) queued ahead of an interrupted one would make the interrupted run wait for an
+    # entire extra run's worth of epochs before it even resumes. `sort` is stable, so within
+    # each group (resumed vs. fresh) jobs keep their original MODEL_SWEEP order.
+    jobs.sort(key=lambda j: not j["resume"])
     return jobs
 
 
