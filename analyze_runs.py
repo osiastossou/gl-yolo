@@ -240,12 +240,17 @@ def build_summary(runs):
 
 
 def render(args):
-    outdir = REPO_ROOT / args.outdir
-    outdir.mkdir(parents=True, exist_ok=True)
-
     runs_dir = Path(args.runs_dir)
     if not runs_dir.is_absolute():
         runs_dir = REPO_ROOT / runs_dir
+
+    # Default outdir lives inside runs_dir itself (runs/analysis, runs-vincent/analysis, ...)
+    # instead of a single top-level analysis/ shared by every runs-dir -- keeps each sweep's
+    # plots/summary bundled with its own results (and swept up by run_gpu.py's runs.zip).
+    outdir = Path(args.outdir) if args.outdir else runs_dir / "analysis"
+    if not outdir.is_absolute():
+        outdir = REPO_ROOT / outdir
+    outdir.mkdir(parents=True, exist_ok=True)
 
     datasets = set(args.datasets.split(",")) if args.datasets else None
     models = set(args.models.split(",")) if args.models else None
@@ -275,7 +280,7 @@ def main():
     parser.add_argument("--runs-dir", type=str, default="runs", help="Dossier contenant les <name><imgsz>/results.csv à analyser (défaut: runs)")
     parser.add_argument("--datasets", type=str, default=None, help="Filtre dataset, ex: 'MVA' ou 'MVA,DT'")
     parser.add_argument("--models", type=str, default=None, help="Filtre modèle, ex: 'Y11,Y12,Y11T'")
-    parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie des graphiques (défaut: analysis)")
+    parser.add_argument("--outdir", type=str, default=None, help="Dossier de sortie des graphiques (défaut: <runs-dir>/analysis)")
     parser.add_argument("--watch", type=int, default=0, help="Re-génère toutes les N secondes au lieu d'une seule fois (défaut: 0)")
     args = parser.parse_args()
 
