@@ -41,8 +41,9 @@ from ultralytics import YOLO
 REPO_ROOT = Path(__file__).resolve().parent
 DATASET_YAML = {d["dataset_name"]: d["yaml"] for d in MODEL_SWEEP}
 
-# "Y11T-MVA1280" -> ("Y11T", "MVA", 1280)
-NAME_RE = re.compile(r"^([A-Za-z0-9]+?)-([A-Za-z]+)(\d+)$")
+# "Y11T-MVA1280" -> ("Y11T", "MVA", 1280) ; "Y11-NWD-MVA1280" -> ("Y11-NWD", "MVA", 1280)
+# Model group is greedy and allows embedded hyphens, so only the trailing "-Dataset<imgsz>" is anchored.
+NAME_RE = re.compile(r"^(.+)-([A-Za-z]+)(\d+)$")
 
 
 def get_device():
@@ -124,7 +125,7 @@ def _grouped_bars(ax, x, series, fmt):
         ax.bar_label(bars, fmt=fmt, fontsize=8)
 
 
-def plot_grouped(df, outdir, split, suffix=""):
+def plot_grouped(df, outdir, split):
     """3 grouped-bar PNGs per dataset: P/R/F1 together, mAP50/mAP50-95 together, FPS together."""
     for dataset in sorted(df["dataset"].unique()):
         sub = df[df["dataset"] == dataset].sort_values("model")
@@ -143,7 +144,7 @@ def plot_grouped(df, outdir, split, suffix=""):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_PRF1_{split}_{dataset}{suffix}.png"
+        out = outdir / f"eval_PRF1_{split}_{dataset}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -159,7 +160,7 @@ def plot_grouped(df, outdir, split, suffix=""):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_mAP_{split}_{dataset}{suffix}.png"
+        out = outdir / f"eval_mAP_{split}_{dataset}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -175,7 +176,7 @@ def plot_grouped(df, outdir, split, suffix=""):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        out = outdir / f"eval_FPS_{split}_{dataset}{suffix}.png"
+        out = outdir / f"eval_FPS_{split}_{dataset}.png"
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"  -> {out}")
@@ -190,14 +191,14 @@ def main():
         "--device", type=str, default=None,
         help="Device ultralytics ('0', 'cpu', 'mps', ...). Défaut: auto-détection (CUDA > MPS > CPU).",
     )
-    parser.add_argument("--outdir", type=str, default="analysis", help="Dossier de sortie (défaut: analysis)")
+    parser.add_argument("--outdir", type=str, default=None, help="Dossier de sortie (défaut: <runs-dir>/analysis)")
     parser.add_argument(
         "--runs-dir", type=str, default="runs",
         help="Dossier contenant les <name><imgsz>/weights/best.pt à évaluer (défaut: runs)",
     )
     parser.add_argument(
         "--plot-only", action="store_true",
-        help="Ne ré-évalue rien : relit analysis/eval_<split>_summary[_<runs-dir>].csv déjà généré et regénère juste les graphiques (pas besoin de GPU)",
+        help="Ne ré-évalue rien : relit <runs-dir>/analysis/eval_<split>_summary.csv déjà généré et regénère juste les graphiques (pas besoin de GPU)",
     )
     args = parser.parse_args()
 
@@ -207,13 +208,15 @@ def main():
     runs_dir = Path(args.runs_dir)
     if not runs_dir.is_absolute():
         runs_dir = REPO_ROOT / runs_dir
-    # suffix output files with the runs-dir name so evaluating an alternate folder (runs-vincent,
-    # runs-colab...) never overwrites the results already computed for runs/
-    suffix = "" if runs_dir.name == "runs" else f"_{runs_dir.name}"
 
-    outdir = REPO_ROOT / args.outdir
+    # Default outdir lives inside runs_dir itself (runs/analysis, runs-vincent/analysis, ...)
+    # instead of a single top-level analysis/ shared by every runs-dir -- keeps each sweep's
+    # eval results bundled with its own results (and swept up by run_gpu.py's runs.zip).
+    outdir = Path(args.outdir) if args.outdir else runs_dir / "analysis"
+    if not outdir.is_absolute():
+        outdir = REPO_ROOT / outdir
     outdir.mkdir(parents=True, exist_ok=True)
-    csv_path = outdir / f"eval_{args.split}_summary{suffix}.csv"
+    csv_path = outdir / f"eval_{args.split}_summary.csv"
 
     if args.plot_only:
         if not csv_path.exists():
@@ -236,7 +239,19 @@ def main():
             print(f"Aucun best.pt trouvé sous {runs_dir}/ (vérifie --runs-dir/--datasets/--models, et que l'entraînement a déjà sauvegardé un best.pt).")
             return
 
-        rows = [evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs{suffix}") for r in runs]
+        rows = []
+        failed = []
+        for r in runs:
+            try:
+                rows.append(evaluate(r, args.split, device, outdir / f"eval_{args.split}_runs"))
+            except Exception as e:
+                print(f"[skip] {r['run']}: {e}")
+                failed.append(r["run"])
+        if failed:
+            print(f"\n{len(failed)} run(s) non évalué(s) (dataset manquant localement ?): {', '.join(failed)}")
+        if not rows:
+            print("Aucun run évalué avec succès.")
+            return
         df = pd.DataFrame(rows)
         pd.set_option("display.float_format", lambda x: f"{x:.4f}")
         print("\n" + df.to_string(index=False))
@@ -247,7 +262,7 @@ def main():
     df["F1"] = 2 * df["precision"] * df["recall"] / (df["precision"] + df["recall"])
 
     print("\nGraphiques:")
-    plot_grouped(df, outdir, args.split, suffix)
+    plot_grouped(df, outdir, args.split)
 
 
 if __name__ == "__main__":
